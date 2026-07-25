@@ -37,11 +37,11 @@ window.tailwind = {};
 // import order mirrors src/main.js (without ./styles.css and without the boot block)
 const order = [
   '../src/ui/helpers.js', '../src/supabase.js', '../src/state.js', '../src/perms.js',
-  '../src/engine/notifications.js', '../src/engine/core.js',
+  '../src/engine/notifications.js', '../src/engine/core.js', '../src/engine/answers.js',
   '../src/ui/nav.js', '../src/ui/charts.js',
   '../src/pages/login.js', '../src/pages/dashboard.js', '../src/pages/users.js',
   '../src/pages/departments.js', '../src/pages/announcements.js',
-  '../src/pages/locations.js', '../src/pages/checklists.js', '../src/pages/mychecklists.js',
+  '../src/pages/locations.js', '../src/pages/documents.js', '../src/pages/checklists.js', '../src/pages/mychecklists.js',
   '../src/pages/teamview.js', '../src/pages/allchecklists.js', '../src/pages/approvals.js',
   '../src/pages/questions.js', '../src/pages/notifications.js', '../src/pages/hierarchy.js',
   '../src/pages/tickets.js', '../src/pages/analytics.js', '../src/pages/audit.js', '../src/pages/profile.js',

@@ -13,7 +13,7 @@ function auditPage(){
     if(s2.includes('ticket'))return 'Tickets';
     if(s2.includes('question'))return 'Questions';
     if(s2.includes('department'))return 'Departments';
-    if(s2.includes('location'))return 'Locations';
+    if(s2.includes('location')||s2.includes('client'))return 'Clients';
     if(s2.includes('announcement'))return 'Announcements';
     if(s2.includes('setting'))return 'Settings';
     return 'Other';};
@@ -33,7 +33,7 @@ function auditPage(){
   });
   const fActive=!!(F.audActor||F.audDept||F.audCat||F.audQ);
   const selSt='font-size:12px;padding:6px 26px 6px 10px;min-height:0;height:32px;width:auto';
-  const catColor={'Checklists':'#0EA5E9','Approvals':'#8B5CF6','Access Control':'#BE123C','Users':'#4338CA','Tickets':'#C2410C','Questions':'#0369A1','Departments':'#0E9F6E','Locations':'#F59E0B','Announcements':'#6B7280','Settings':'#64748B','Other':'#9CA3AF'};
+  const catColor={'Checklists':'#0EA5E9','Approvals':'#8B5CF6','Access Control':'#BE123C','Users':'#4338CA','Tickets':'#C2410C','Questions':'#0369A1','Departments':'#0E9F6E','Clients':'#F59E0B','Announcements':'#6B7280','Settings':'#64748B','Other':'#9CA3AF'};
   const list=rows.map(l=>{const c=cat(l);const u=DB.users.find(x=>fullName(x)===l.actor);
     return `<div style="display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--c-border);font-size:13.5px">
       ${u?avatar(u,'w-7 h-7','text-[10px]'):'<span style="width:7px;height:7px;border-radius:99px;background:var(--c-brand);flex-shrink:0"></span>'}

@@ -41,14 +41,13 @@ function _hrmUserSection(u){
   const off=new Set(s.offDays||[]);
   return `<div class="bg-ink-50 rounded-2xl p-4 space-y-3"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide">Directory details</p>
     <div class="grid grid-cols-2 gap-3">${fld('Date of birth','u-dob',h.dob||'','date')}${fld('Joining date','u-join',h.joiningDate||'','date')}</div>
-    <div>${selF('Office location (where they work)','u-loc',[['','— None —'],...DB.locations.filter(l=>l.status==='Active').map(l=>[l.id,l.name])],h.locationId||'')}<p style="font-size:11px;color:#9CA3AF;margin-top:4px">Their workplace. Roles scoped to "their office" in Access Control resolve against this.</p></div>
   </div>`;
   /* perms v2: the HR toggle + role-profile picker moved to the Access Control tab. */
 }
 function _readHrmFromForm(prev){
   const g=i=>($('#'+i)?.value||'').trim();
   const p=prev&&typeof prev==='object'?prev:{};
-  /* This build edits three directory fields. Everything else on u.hrm belongs to modules it
+  /* This build edits two directory fields. Everything else on u.hrm belongs to modules it
      doesn't ship (work schedule, salary, probation, pension, asset records) — and the whole blob
      syncs to user_hrm, which is SHARED, so untouched fields are carried through verbatim rather
      than rewritten with a default. Access stays managed in Access Control. */
@@ -56,17 +55,16 @@ function _readHrmFromForm(prev){
     ...p,
     dob:$('#u-dob')?(g('u-dob')||null):(p.dob??null),
     joiningDate:$('#u-join')?(g('u-join')||null):(p.joiningDate??null),
-    locationId:$('#u-loc')?($('#u-loc').value||null):(p.locationId??null),
     isHR:p.isHR===true,
     roleProfileId:p.roleProfileId||null,
     perms:(p.perms&&typeof p.perms==='object')?p.perms:undefined,
     permsBaked:p.permsBaked||0,
   };
 }
-// City (location) scope checkboxes for the user modal.
+// Client-access checkboxes for the user modal.
 function _cityScopeChips(u){
   const active=(DB.locations||[]).filter(l=>l.status==='Active');
-  if(!active.length)return'<p style="font-size:12px;color:#9CA3AF">No cities/locations defined yet. Add them in the Locations tab.</p>';
+  if(!active.length)return'<p style="font-size:12px;color:#9CA3AF">No clients yet. Add them in the Clients tab.</p>';
   const sel=new Set(Array.isArray(u&&u.cities)?u.cities:[]);
   return'<div style="display:flex;flex-wrap:wrap;gap:8px">'+active.map(l=>`<label style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid ${sel.has(l.id)?'#6EE7B7':'#E5E7EB'};border-radius:10px;padding:6px 11px;font-size:12px;font-weight:600;color:#374151;cursor:pointer"><input type="checkbox" class="city-chk" data-id="${esc(l.id)}" ${sel.has(l.id)?'checked':''} onchange="this.closest('label').style.borderColor=this.checked?'#6EE7B7':'#E5E7EB'"> ${esc(l.name)}</label>`).join('')+'</div>';
 }
@@ -91,7 +89,7 @@ App.editUser=(id=null)=>{
       ?`<select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select>`
       // C2: no assignManager permission → current manager read-only + hidden input so saveUser preserves it.
       :`<div class="w-full bg-ink-50 border border-ink-200 rounded-xl px-3 py-2.5 text-sm text-ink-500">${esc(u?.managerId?fullName(uById(u.managerId)):'— None —')}</div><input type="hidden" id="u-mgr" value="${esc(u?.managerId||'')}">`}</div></div>
-    ${!u?fld('Password','u-pw','','password','Set a password'):''}
+    ${!u?fldPw('Password','u-pw','','Set a password','Minimum 6 characters — tap the eye to check it'):''}
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Notifications</p>${mkTog('u-em',u?.emailEnabled??true,'Receive email notifications')}</div>
     ${_hrmUserSection(u)}
     <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><p style="flex:1;min-width:200px;font-size:11.5px;color:#1E40AF;line-height:1.5;margin:0"><strong>All access &amp; permissions</strong> — tabs, submission rules, approvals, HR powers, document/city access — are managed per person in <strong>Access Control</strong>.</p>${(u&&can('accessControl','view'))?`<button type="button" onclick="App.closeModal();S.filters.acUser='${u.id}';App.go('accesscontrol')" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('shield','w-4 h-4')}Open Access Control</button>`:''}</div>
@@ -215,7 +213,7 @@ App.resetPw=(id)=>{
   if(!can('employees','edit')||!scopeFilter('employees')(id)){toast('Not allowed','err');return;}
   const u=uById(id);
   modalShell({title:'Reset password',sub:'New password for '+fullName(u),size:'max-w-sm',
-    body:fld('New password','rp-pw','','password',''),
+    body:fldPw('New password','rp-pw','','New password','Minimum 6 characters — tap the eye to check it'),
     footer:btnG('Cancel','App.closeModal()')
       +'<button type="button" id="rp-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent=\'Resetting…\';App._doResetPw(this.dataset.uid).finally(()=>{const b=document.getElementById(\'rp-btn\');if(b){b.disabled=false;b.textContent=\'Reset\';}})" data-uid="'+id+'" class="ui-btn ui-btn-primary">Reset</button>'});
 };

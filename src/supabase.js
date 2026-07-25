@@ -177,7 +177,9 @@ async function _lazyLoadDate(view){
   if(_tabLoading[key])return;_tabLoading[key]=true;_syncBar(true);
   try{
     const{data,error}=await sb.from('submissions').select('*').eq('date',d).order('submitted_at',{ascending:false});
-    if(!error){_applySubmissions(data,{merge:true});saveDB();rr();}
+    if(!error)_applySubmissions(data,{merge:true});
+    await _ansLoadDate(d);
+    saveDB();rr();
   }catch(e){console.warn('[lazyLoadDate]',e.message);}
   finally{_tabLoading[key]=false;_syncBar(_anyLoading());}
 }
@@ -408,6 +410,13 @@ async function loadFromSB(){
       if(error){console.error('[TK] error:',error.message);return;}
       _applyTickets(data);saveDB();rr();
     }).catch(e=>console.error('[TK] fetch failed:',e.message));
+
+  // ── Shared checklist answers + edit requests + checklist meta (7-day hot window; the day
+  //    being viewed loads on demand via _lazyLoadDate). ──
+  _ansLoadWindow(_cutoff7Date()).then(()=>{saveDB();rr();}).catch(()=>{});
+
+  // ── Location folders + documents (new tm_ tables). ──
+  _docsLoad().then(()=>{saveDB();rr();}).catch(()=>{});
 
   // ── Announcements + personal drafts (defensive targeted-load pattern: a missing or
   //    RLS-locked table logs a warning and leaves the local array as-is). ──

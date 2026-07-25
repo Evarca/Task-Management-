@@ -1,7 +1,7 @@
 
 
 /* ===== LIVE DASHBOARD CHARTS (Chart.js) =====
-   _AData / _HData are filled by analyticsPage() / homeDash() during render; the canvases are then
+   _AData is filled by analyticsPage() during render; the canvases are then
    painted by _paintCharts(), which render()/rr() call after the DOM is in place. Charts are destroyed
    and rebuilt on every render so they always reflect the current filters. */
 function _aChartTheme(){
@@ -55,7 +55,7 @@ const _ctp={id:'ctp',afterDraw(c){const t=c.config&&c.config.options&&c.config.o
   ctx.font="700 9.5px 'Hanken Grotesk',sans-serif";ctx.fillStyle='#8A93A3';ctx.fillText(String(t.l||'').toUpperCase(),x,y+12);ctx.restore();}};
 function _destroyACharts(){_aCharts.forEach(c=>{try{c.destroy();}catch(e){}});_aCharts=[];}
 function _paintCharts(){try{
-  const need=document.getElementById('aChartStatus')||document.getElementById('hChartMyWork');
+  const need=document.getElementById('aChartStatus');
   // R9: if Chart.js hasn't arrived from the CDN yet, retry for ~3s, then say so VISIBLY instead of
   // leaving silent blank boxes (owner report "all graphs empty" — a blocked CDN looks exactly like that).
   if(need&&typeof Chart==='undefined'){
@@ -66,7 +66,6 @@ function _paintCharts(){try{
   }
   _paintCharts._r=0;
   if(document.getElementById('aChartStatus'))_drawAnalyticsCharts();
-  else if(document.getElementById('hChartMyWork'))_drawHomeCharts();
   else _destroyACharts();
 }catch(e){console.warn('[charts]',e&&e.message);}}
 function _aClick(fn){return (e,els)=>{if(els&&els.length)fn(els[0].index,els[0].datasetIndex);};}
@@ -89,14 +88,6 @@ function _drawAnalyticsCharts(){
   if(A.weekday)mk('aChartWeekday',_allZero(A.weekday.data),{type:'bar',data:{labels:A.weekday.labels,datasets:[{label:'Submissions',data:A.weekday.data,backgroundColor:_vfill(T.violet,'CC'),hoverBackgroundColor:T.violet,maxBarThickness:34,borderRadius:9}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:T.tick,font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{color:T.tick,font:{size:10},precision:0},grid:{color:T.grid}}}}});
   mk('aChartEmp',!A.emp.labels.length,{type:'bar',data:{labels:A.emp.labels,datasets:[{label:'On time',data:A.emp.onTime,backgroundColor:T.brand,maxBarThickness:16},{label:'Late',data:A.emp.late,backgroundColor:T.rose,maxBarThickness:16},{label:'Pending',data:A.emp.pend,backgroundColor:T.amber,maxBarThickness:16}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:legB,onHover:_aHover,onClick:_aClick(i=>{const id=A.emp.ids[i];if(id)App._userDrill(id);}),scales:{x:{stacked:true,beginAtZero:true,ticks:{color:T.tick,font:{size:10},precision:0},grid:{color:T.grid}},y:{stacked:true,ticks:{color:T.tick,font:{size:11}},grid:{display:false}}}}});
   mk('aChartCompliance',_allZero(A.compliance.data),{type:'doughnut',plugins:[_ctp],data:{labels:A.compliance.labels,datasets:[{data:A.compliance.data,backgroundColor:A.compliance.colors,borderWidth:0,hoverOffset:8,borderRadius:6,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'74%',_center:(()=>{const tot=A.compliance.data.reduce((a,b)=>a+b,0);return{v:(tot?Math.round((A.compliance.data[0]||0)/tot*100):0)+'%',l:'compliant'};})(),plugins:legB,onHover:_aHover,onClick:_aClick(i=>App._chartDrill('compliance',A.compliance.labels[i]))}});
-}
-function _drawHomeCharts(){
-  if(typeof Chart==='undefined'||!_HData)return;
-  _destroyACharts();
-  const T=_aChartTheme();
-  const mk=(id,empty,cfg)=>{const cv=document.getElementById(id);if(!cv)return;if(empty){_emptyChart(id);return;}try{_aCharts.push(new Chart(cv.getContext('2d'),cfg));}catch(e){}};
-  // "My record" — how this person's own checklist submissions landed over the selected range.
-  if(_HData.myWork)mk('hChartMyWork',_allZero(_HData.myWork.data),{type:'doughnut',plugins:[_ctp],data:{labels:_HData.myWork.labels,datasets:[{data:_HData.myWork.data,backgroundColor:[T.brand,T.amber,T.violet,T.rose,'#94A3B8'],borderWidth:0,hoverOffset:8,borderRadius:6,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',_center:{v:_HData.myWork.done+'/'+_HData.myWork.assigned,l:'submitted'},plugins:{legend:{position:'bottom',labels:{color:T.tick}}}}});
 }
 // Export every visible chart as a PNG (white background) plus the data CSV.
 function _pngWithBg(cv){const c=document.createElement('canvas');c.width=cv.width||cv.clientWidth;c.height=cv.height||cv.clientHeight;const x=c.getContext('2d');x.fillStyle='#ffffff';x.fillRect(0,0,c.width,c.height);x.drawImage(cv,0,0);return c.toDataURL('image/png');}
@@ -135,4 +126,4 @@ App._chartDrill=(kind,key)=>{
   if(kind==='ticket')return _ticketDrillModal(key,D.tickets);
 };
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._aChartTheme=_aChartTheme;window._vfill=_vfill;window._ctp=_ctp;window._destroyACharts=_destroyACharts;window._paintCharts=_paintCharts;window._aClick=_aClick;window._aHover=_aHover;window._allZero=_allZero;window._emptyChart=_emptyChart;window._drawAnalyticsCharts=_drawAnalyticsCharts;window._drawHomeCharts=_drawHomeCharts;window._pngWithBg=_pngWithBg;window._subListModal=_subListModal;window._missedDrillModal=_missedDrillModal;window._ticketDrillModal=_ticketDrillModal;
+window._aChartTheme=_aChartTheme;window._vfill=_vfill;window._ctp=_ctp;window._destroyACharts=_destroyACharts;window._paintCharts=_paintCharts;window._aClick=_aClick;window._aHover=_aHover;window._allZero=_allZero;window._emptyChart=_emptyChart;window._drawAnalyticsCharts=_drawAnalyticsCharts;window._pngWithBg=_pngWithBg;window._subListModal=_subListModal;window._missedDrillModal=_missedDrillModal;window._ticketDrillModal=_ticketDrillModal;

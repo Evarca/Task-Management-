@@ -10,10 +10,24 @@ function teamViewPage(){
     // see everyone. Never silently render My Checklists here — that read as a bug.
     const directReports=DB.users.filter(u=>u.managerId===S.uid&&u.id!==S.uid);
     const orgWide=isAdmin()||scopeOf('employees')==='everyone'; // R15: the role's employees scope decides
-    const team=orgWide?DB.users.filter(u=>u.id!==S.uid&&u.status==='Active'):directReports; // R8: include super admins
-    if(!team.length)return`<div class="fade">${hdr('Team','Live checklist status of your team')}${empty('users','No team members yet','Nobody reports to you. Ask an admin to set you as someone\'s manager in Users, or check Access Control → Team view.')}</div>`;
+    let team=orgWide?DB.users.filter(u=>u.id!==S.uid&&u.status==='Active'):directReports; // include super admins
+    /* Client filter: show the people who are actually assigned to a checklist run for that
+       client — the only link between a person and a client in this build. */
+    const _tvC=S.filters.tvClient||'';
+    if(_tvC){
+      const ids=new Set((DB.checklists||[]).filter(c=>matchesClient(clientIdsOf(c),_tvC)).flatMap(c=>c.assignees||[]));
+      team=team.filter(u=>ids.has(u.id));
+    }
+    const _tvBar=`<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px">
+      <span style="font-size:11.5px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Filter</span>
+      ${clientFilter('tvClient')}
+      ${_tvC?`<button onclick="delete S.filters.tvClient;rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:''}
+      <span style="font-size:11.5px;color:var(--c-text-3);font-weight:600;margin-left:auto">${team.length} ${team.length===1?'person':'people'}</span>
+    </div>`;
+    if(!team.length)return`<div class="fade">${hdr('Team','Live checklist status of your team')}${_tvBar}${empty('users',_tvC?'Nobody works on that client':'No team members yet',_tvC?'No checklist for that client is assigned to your team.':'Nobody reports to you. Ask an admin to set you as someone\'s manager in Users, or check Access Control → Team view.')}</div>`;
     return`<div class="fade">
       ${hdr('Team','Your people and every checklist — one place')}
+      ${_tvBar}
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
         ${team.map(u=>{
           const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;

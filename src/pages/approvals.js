@@ -11,10 +11,11 @@ function approvalsPage(){return unifiedApprovalsPage();}
 // to the native handlers.
 const USE_UNIFIED_APPROVALS=true;
 const _APPR_META={
-  submission: {icon:'check',    label:'Submissions', chip:'Submissions'},
-  edit:       {icon:'edit',     label:'Edits',       chip:'Edits'},
+  submission: {icon:'check',    label:'Submissions',  chip:'Submissions'},
+  edit:       {icon:'edit',     label:'Edits',        chip:'Edits'},
+  answerEdit: {icon:'edit',     label:'Answer edits', chip:'Answer edits'},
 };
-const _APPR_ORDER=['submission','edit'];
+const _APPR_ORDER=['submission','edit','answerEdit'];
 function unifiedApprovalsPage(){
   const all=_approvalInbox();
   // Status sub-tabs: Pending / Approved / Rejected. Default Pending (the actionable view).
@@ -48,7 +49,7 @@ function unifiedApprovalsPage(){
   //   load (which re-renders on completion), so the page can never get stuck on "Loading…".
   const body=rows.length?rows.map(_inboxRow).join('')
     :empty(emptyMsg[0],emptyMsg[1],emptyMsg[2]);
-  return '<div class="fade">'+hdr('Approvals','Checklist submissions and edit requests waiting for your decision')
+  return '<div class="fade">'+hdr('Approvals','Checklist submissions and answer-edit requests waiting for your decision')
     +statusBar+chips+bulkBar
     +'<div class="space-y-3">'+body+'</div></div>';
 }
@@ -59,8 +60,11 @@ function _inboxRow(x){
   const when=x.payload?.createdAt?new Date(x.payload.createdAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
   const canAct=x.status==='Pending';
   // native decision routing keyed off _src.coll
-  const approveCall="App._decideApprove('"+esc(x._src.id)+"')";
-  const rejectCall="App._decideReject('"+esc(x._src.id)+"')";
+  const isAns=x._src.coll==='tmAnswerEdits';
+  const approveCall=isAns?"App._ansEditDecide('"+esc(x._src.id)+"','approve')":"App._decideApprove('"+esc(x._src.id)+"')";
+  const rejectCall =isAns?"App._ansEditDecide('"+esc(x._src.id)+"','reject')" :"App._decideReject('"+esc(x._src.id)+"')";
+  // A requester sees their own pending request but can't decide it.
+  const canDecide=!isAns||_ansCanDecide(x.payload);
   // Delete control: a DECIDED submission/edit record can be cleared from history by the
   // requester, an approver or an admin. Pending rows are decided, never deleted.
   const _del=(()=>{
@@ -78,12 +82,12 @@ function _inboxRow(x){
     +(x.status!=='Pending'?chip(x.status):'')+'</div>'
     +'<div style="font-size:12.5px;color:var(--c-text-2);margin-top:3px">'+esc(u?fullName(u):'Unknown')+(x.dept?' · '+esc(x.dept):'')+(when?' · '+when:'')+'</div>'
     +'</div></div>'
-    +(canAct
+    +((canAct&&canDecide)
       ?'<div style="display:flex;gap:8px;margin-top:14px">'
         +'<button class="ui-btn ui-btn-brand ui-btn-sm" style="flex:1" onclick="'+approveCall+'">'+ic('approve','w-4 h-4')+'Approve</button>'
         +'<button class="ui-btn ui-btn-ghost ui-btn-sm" style="flex:1;color:var(--c-danger-ink)" onclick="'+rejectCall+'">Reject</button>'
         +'</div>'
-      :'')
+      :(canAct?'<div style="margin-top:12px;font-size:11.5px;color:var(--c-text-3)">Waiting on your manager to decide.</div>':''))
     +'</div>';
 }
 /* Delete a DECIDED submission/edit approval record (history cleanup — logged). */
@@ -105,6 +109,27 @@ App._setApprTab=(t)=>{S.filters.atab=t;S.filters.inboxType='all';rr();};
 // Open type-specific detail reusing existing renderers.
 App._inboxOpen=(iid)=>{
   const x=_approvalInbox().find(i=>i.id===iid);if(!x)return;
+  if(x.type==='answerEdit'){
+    const e=x.payload;const c=clById(e.checklistId);
+    const q=(DB.questions||[]).find(z=>z.id===e.questionId);
+    const cur=(DB.tmAnswers||[]).find(z=>z.id===e.answerId);
+    const who=uById(e.requestedBy);
+    modalShell({title:'Answer edit request',sub:(c?c.name:'')+' · '+fmtD(e.date),size:'max-w-sm',
+      body:'<div>'
+        +'<div style="background:var(--c-surface-2);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+        +'<div style="font-size:12px;font-weight:700;color:var(--c-text)">'+esc(q?q.text:'Question')+'</div>'
+        +'<div style="font-size:12.5px;color:var(--c-text-2);margin-top:4px">Current answer: <strong>'+esc(String((cur&&cur.response)??'—'))+'</strong></div>'
+        +(cur&&cur.comment?'<div style="font-size:12px;color:var(--c-text-3);margin-top:3px;font-style:italic">"'+esc(cur.comment)+'"</div>':'')
+        +'</div>'
+        +'<div style="font-size:12.5px;color:var(--c-text-2)">Requested by <strong>'+esc(who?fullName(who):'—')+'</strong>'+(e.requestedAt?' · '+new Date(e.requestedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+'</div>'
+        +(e.reason?'<div style="margin-top:8px;font-size:12.5px;color:var(--c-text-2);background:var(--c-surface-2);border-radius:8px;padding:8px">'+esc(e.reason)+'</div>':'')
+        +(x.status!=='Pending'?'<div style="margin-top:10px;font-size:12px;font-weight:700;color:var(--c-text-2)">'+esc(x.status)+'</div>':'')
+        +'</div>',
+      footer:(x.status==='Pending'&&_ansCanDecide(e))
+        ?btn('Approve',"App.closeModal();App._ansEditDecide('"+esc(e.id)+"','approve')",{variant:'brand'})+btnDanger('Reject',"App.closeModal();App._ansEditDecide('"+esc(e.id)+"','reject')")
+        :btnG('Close','App.closeModal()')});
+    return;
+  }
   const a=x.payload;
   // reuse the existing submission viewer (checklist + photos)
   let s=DB.submissions.find(z=>z.checklistId===a.checklistId&&z.userId===a.requesterId&&z.date===a.date);
@@ -121,7 +146,10 @@ App._bulkApproveInbox=(type)=>{
   const rows=_approvalInbox().filter(x=>x.type===type&&x.status==='Pending');
   if(!rows.length){toast('Nothing to approve','warn');return;}
   let n=0;
-  rows.forEach(x=>{const a=DB.approvals.find(z=>z.id===x._src.id);if(a&&a.status==='Pending'&&a.requesterId!==S.uid){App._decideApprove(a.id);n++;}});
+  rows.forEach(x=>{
+    if(x._src.coll==='tmAnswerEdits'){const e=(DB.tmAnswerEdits||[]).find(z=>z.id===x._src.id);if(e&&e.status==='Pending'&&_ansCanDecide(e)){App._ansEditDecide(e.id,'approve');n++;}return;}
+    const a=DB.approvals.find(z=>z.id===x._src.id);if(a&&a.status==='Pending'&&a.requesterId!==S.uid){App._decideApprove(a.id);n++;}
+  });
   toast(n+' approved');
   // native handlers each render; ensure a final fresh render from the inbox model
   rr();

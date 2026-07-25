@@ -42,7 +42,7 @@ const PERM_AREAS=[
   {key:'reports',label:'Dashboard — HRM Analytics',desc:'HR analytics dashboard & CSV exports',actions:['view','download'],scoped:true,group:'Dashboards & Inbox'},
   {key:'okr',label:'OKRs',desc:'Hierarchical objectives (L0 → L1 → L2) with annual → quarterly splits. “Sees” decides WHOSE objectives they can view — owners always see their own (they have to update them); sub-objectives of anything visible are included',actions:['view','create','edit','checkin','manage','delete'],scoped:true,group:'Dashboards & Inbox'},
   {key:'announcements',label:'Announcements',desc:'Company-wide messages',actions:['view','create','delete'],scoped:false,group:'Work & Content'},
-  {key:'locations',label:'Locations',desc:'Offices and GPS boundary — “Manage” = geofence settings',actions:['view','create','edit','delete','manage'],scoped:false,group:'Administration'},
+  {key:'locations',label:'Clients',desc:'The client list, and the folders and documents held against each one',actions:['view','create','edit','delete','manage'],scoped:false,group:'Administration'},
   {key:'departments',label:'Departments',desc:'Departments & sub-departments — create, edit and delete are separate toggles',actions:['view','create','edit','delete'],scoped:false,group:'Administration'},
   {key:'approvals',label:'Inbox — Approvals',desc:'The unified approvals page (what they can act on is still per-area)',actions:['view'],scoped:false,group:'Dashboards & Inbox'},
   {key:'scheduling',label:'Shifts / Roster',desc:'The weekly shift roster — build, edit, publish and delete are separate toggles',actions:['view','create','edit','publish','delete'],scoped:true,group:'Time & Leave'},
@@ -61,6 +61,10 @@ const PERM_AREAS=[
 const PERM_ACTION_LABEL={view:'View',create:'Create',edit:'Edit',delete:'Delete',deactivate:'Deactivate',approve:'Approve',download:'Download / Export',manage:'Manage',manageSettings:'Manage settings',assign:'Assign',assignRole:'Assign role profile',assignManager:'Assign manager',grant:'Grant / Remove',submit:'Submit',upload:'Upload',manageGeofence:'Manage geofence',issue:'Issue',verify:'Verify',run:'Run',finalize:'Finalize',rollback:'Roll back',checkin:'Check-in / Update',changeStatus:'Change status',resolve:'Resolve',duplicate:'Duplicate',resetPassword:'Reset password',manageAssets:'Assets (assign / return)',start:'Start / Assign flow',progress:'Update steps',publish:'Publish',close:'Open / Close'};
 const SCOPE_ORDER=['none','self','team','department','location','everyone'];
 const SCOPE_LABEL={none:'None',self:'Only their own',team:'Their team',department:'Their department',location:'Their office',everyone:'Everyone'};
+/* People are no longer assigned to an office, so the 'location' scope has nothing left to
+   resolve against and is not offered in the editor. It stays in SCOPE_ORDER so a bundle saved
+   earlier (or by the full platform) still reads back correctly instead of silently changing. */
+const SCOPE_CHOICES=SCOPE_ORDER.filter(x=>x!=='location');
 const _areaByKey=k=>PERM_AREAS.find(a=>a.key===k);
 
 /* ── MICRO-PERMISSIONS MIGRATION (v10) ──
@@ -279,4 +283,4 @@ function scopeFilter(area){
 function scopedUsers(area){const f=scopeFilter(area);return DB.users.filter(u=>f(u.id));}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.PERM_GROUPS=PERM_GROUPS;window.PERM_AREAS=PERM_AREAS;window.TM_AREAS=TM_AREAS;window._tmAreas=_tmAreas;window.PERM_ACTION_LABEL=PERM_ACTION_LABEL;window.SCOPE_ORDER=SCOPE_ORDER;window.SCOPE_LABEL=SCOPE_LABEL;window._areaByKey=_areaByKey;window._seedRoleProfiles=_seedRoleProfiles;window._permsMicroMigrate=_permsMicroMigrate;window._permsMicroExpand=_permsMicroExpand;window._MICRO_EXPAND=_MICRO_EXPAND;window._myProfile=_myProfile;window._roleOf=_roleOf;window._userPermArea=_userPermArea;window.can=can;window.canUser=canUser;window._acLockoutSafe=_acLockoutSafe;window._roleIdForUser=_roleIdForUser;window._permsV3Migrate=_permsV3Migrate;window.scopeOf=scopeOf;window.scopeFilter=scopeFilter;window.scopedUsers=scopedUsers;
+window.PERM_GROUPS=PERM_GROUPS;window.PERM_AREAS=PERM_AREAS;window.TM_AREAS=TM_AREAS;window._tmAreas=_tmAreas;window.PERM_ACTION_LABEL=PERM_ACTION_LABEL;window.SCOPE_ORDER=SCOPE_ORDER;window.SCOPE_CHOICES=SCOPE_CHOICES;window.SCOPE_LABEL=SCOPE_LABEL;window._areaByKey=_areaByKey;window._seedRoleProfiles=_seedRoleProfiles;window._permsMicroMigrate=_permsMicroMigrate;window._permsMicroExpand=_permsMicroExpand;window._MICRO_EXPAND=_MICRO_EXPAND;window._myProfile=_myProfile;window._roleOf=_roleOf;window._userPermArea=_userPermArea;window.can=can;window.canUser=canUser;window._acLockoutSafe=_acLockoutSafe;window._roleIdForUser=_roleIdForUser;window._permsV3Migrate=_permsV3Migrate;window.scopeOf=scopeOf;window.scopeFilter=scopeFilter;window.scopedUsers=scopedUsers;

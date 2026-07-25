@@ -1,7 +1,7 @@
 
 /* ===== NAVIGATION ===== */
 // Flat lookup used by the mobile bottom bar (route → icon + label).
-const NAV_ITEMS=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['announcements','msg','Announcements'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Create Checklist'],['allcl','list','All Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['teamview','users','Team'],['analytics','chart','Dashboard'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit'],['accesscontrol','shield','Access Control']];
+const NAV_ITEMS=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['announcements','msg','Announcements'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Create Checklist'],['allcl','list','All Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['teamview','users','Team'],['analytics','chart','Dashboard'],['locations','pin','Clients'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit'],['accesscontrol','shield','Access Control']];
 // Bottom bar: My Day, the day's checklists and tickets are the three things an employee
 // opens all day; everything else lives behind More.
 const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
@@ -46,7 +46,7 @@ const HUB_DEF={
     ['settings','Settings',()=>can('settings','view')],
     ['accesscontrol','Access Control',()=>can('accessControl','view')],
     ['departments','Departments',()=>can('departments','view')],
-    ['locations','Locations',()=>can('locations','view')],
+    ['locations','Clients',()=>can('locations','view')],
     ['audit','Audit',()=>can('audit','view')]]},
 };
 function _hubOf(route){for(const k in HUB_DEF)if(HUB_DEF[k].tabs.some(t=>t[0]===route))return k;return null;}
@@ -338,7 +338,7 @@ App._cmdkQ=(q)=>{
   Object.keys(HUB_DEF).forEach(k=>{_hubTabsAllowed(k).forEach(([r,l])=>{if(q&&!l.toLowerCase().includes(q))return;out.push({icon:'grid',label:l,sub:HUB_DEF[k].label,go:`App.closeModal();App.go('${r}')`});});});
   if(can('employees','view'))scopedUsers('employees').forEach(u=>{if(q&&fullName(u).toLowerCase().includes(q))out.push({icon:'users',label:fullName(u),sub:(u.position||'Person')+' · '+(u.department||''),go:`App.closeModal();S.search='${esc(fullName(u))}';App.go('users')`});});
   if(can('checklists','view'))(DB.checklists||[]).forEach(c=>{if(q&&(c.name||'').toLowerCase().includes(q))out.push({icon:'list',label:c.name,sub:'Checklist'+(c.department?' · '+c.department:''),go:`App.closeModal();App.go('allcl');S.search='${esc(c.name)}';rr()`});});
-  const SUB=[['Roles (Access Control)','accesscontrol','acTab','roles','accessControl'],['People (Access Control)','accesscontrol','acTab','people','accessControl'],['Notifications','settings','stab','notif','settings'],['Email settings','settings','stab','email','settings'],['Templates (Settings)','settings','stab','templates','settings']];
+  const SUB=[['Roles (Access Control)','accesscontrol','acTab','roles','accessControl'],['People (Access Control)','accesscontrol','acTab','people','accessControl'],['Notifications','settings','stab','notif','settings'],['Email templates','settings','stab','templates','settings'],['Workspace data','settings','stab','data','settings']];
   SUB.forEach(([label,route,fk,fv,area])=>{if(q&&label.toLowerCase().includes(q)&&can(area,'view'))out.push({icon:'cog',label:label,sub:'Screen',go:`App.closeModal();App.go('${route}');S.filters.${fk}='${fv}';rr()`});});
   box.innerHTML=out.slice(0,12).map(r=>`<button data-go onclick="${r.go}" style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;border:none;background:transparent;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--c-surface-2)'" onmouseout="this.style.background='transparent'">
     <span style="width:30px;height:30px;border-radius:9px;background:var(--c-surface-2);display:grid;place-items:center;color:var(--c-text-2);flex-shrink:0">${ic(r.icon,'w-4 h-4')}</span>

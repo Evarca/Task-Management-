@@ -74,9 +74,9 @@ function _r2(n){return Math.round(n*100)/100;}
 function _m2hm(m){if(m==null)return'—';m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
 
 /* ════════ APPROVAL INBOX ════════
-   One normalised list of everything waiting on a decision. In this build that is
-   checklist submissions and edit requests; the shape is kept generic so the inbox
-   UI, the badge count and the bulk-approve loop all read one model. */
+   One normalised list of everything waiting on a decision: checklist submissions, and
+   requests to change a single already-submitted answer. The shape is kept generic so the
+   inbox UI, the badge count and the bulk-approve loop all read one model. */
 function _approvalInbox(){
   const items=[];
   // Admins see every approval; everyone else sees their own plus their reporting line.
@@ -93,6 +93,24 @@ function _approvalInbox(){
       payload:a, status:st, decidedBy:null, decidedAt:null,
       location:u.location||'', dept:u.department||'',
       _src:{coll:'approvals',id:a.id}
+    });
+  });
+  // (b) ANSWER EDIT requests — someone wants to change one answer they already submitted.
+  //     Visible to whoever can actually decide it: their manager, or a checklist approver.
+  (DB.tmAnswerEdits||[]).forEach(e=>{
+    const u=uById(e.requestedBy);if(!u)return;
+    const mine=e.requestedBy===S.uid;
+    if(!(_ansCanDecide(e)||mine))return;
+    const c=clById(e.checklistId);
+    const q=(DB.questions||[]).find(x=>x.id===e.questionId);
+    const st=e.status==='Used'?'Approved':e.status;
+    items.push({
+      id:'ae-'+e.id, type:'answerEdit', requestedBy:e.requestedBy, assignedTo:u.managerId||null,
+      subject:(c?c.name:'Checklist')+' · '+String(q?q.text:'answer').slice(0,48),
+      payload:{...e,createdAt:e.requestedAt}, status:st,
+      decidedBy:e.decidedBy||null, decidedAt:e.decidedAt||null,
+      location:u.location||'', dept:u.department||'',
+      _src:{coll:'tmAnswerEdits',id:e.id}
     });
   });
   return items;

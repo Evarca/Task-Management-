@@ -36,7 +36,14 @@ window.DB={
   // ── Drafts (PHASE4b) — per-user, server-backed saves of in-progress checklist runs and OKR
   //    check-ins (syncs to the `drafts` table; RLS = owner only). Photos are stripped from payloads.
   //    {id,userId,kind:'checklist'|'okr',refId,date|null,payload,updatedAt}
-  drafts:[]
+  drafts:[],
+  // ── Task-management build: the SHARED per-question run ──
+  //    tmAnswers      one row per (checklist, date, question) — who answered, when, locked?
+  //    tmAnswerEdits  edit requests raised against a single submitted answer
+  //    tmMeta         per-checklist extras this build adds (the optional deadline date)
+  tmAnswers:[],tmAnswerEdits:[],tmMeta:{},
+  // ── Location documents (new tm_folders / tm_documents tables) ──
+  tmFolders:[],tmDocuments:[]
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -102,7 +109,8 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted','departments_deleted','locations_deleted','leaveTypes_deleted','attendance','leaveTypes','leaveRequests','leaveBalances','holidays','hrmAudit','announcements','shifts','okrs','okrCheckins','okrLogs','flows','letters','discipline','overtime','payrollRuns','payrollItems','surveys','surveyAnswers'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','audit','notifications','questions','checklists_deleted','questions_deleted','users_deleted','departments_deleted','locations_deleted','hrmAudit','announcements','tmAnswers','tmAnswerEdits','tmFolders','tmDocuments'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    if(!DB.tmMeta||typeof DB.tmMeta!=='object')DB.tmMeta={};
     // OKR v2 migration: drop the retired question-linked OKR model from stale localStorage.
     // Old rows are recognisable by having no metricType (they carried questionId/rollup instead).
     DB.okrs=(DB.okrs||[]).filter(o=>o&&o.metricType);
@@ -246,13 +254,17 @@ function myCls(uid,date){
   });
 }
 const subFor=(clId,uid,date)=>DB.submissions.find(s=>s.checklistId===clId&&s.userId===uid&&s.date===date);
-// Checklist-aware lookup: own submission first; in "any one can complete" mode,
-// a completed submission by ANY assignee counts for everyone (someone else's mid-edit doesn't block you)
+/* A run is SHARED in this build: several assignees each answer different questions of the same
+   checklist on the same day, and one submission closes it for all of them. So a completed
+   submission by ANY assignee counts for everyone — own submission first (so your own mid-edit
+   still wins), then any teammate's completed one. */
 const subForCl=(c,uid,date)=>{
   const own=subFor(c.id,uid,date);
-  if(own||!c.anyOne)return own||null;
+  if(own)return own;
   return DB.submissions.find(s=>s.checklistId===c.id&&s.date===date&&s.status!=='Editing')||null;
 };
+// Any submission for this run regardless of who made it or its state (used by the run guard).
+const runSub=(clId,date)=>DB.submissions.find(s=>s.checklistId===clId&&s.date===date)||null;
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.log=log;window.LS_KEY=LS_KEY;window.saveDB=saveDB;window.loadDB=loadDB;window.S=S;window.me=me;window.isAdmin=isAdmin;window._pidOf=_pidOf;window.isSuperU=isSuperU;window.roleName=roleName;window.hasDocAccess=hasDocAccess;window.subTree=subTree;window._mgrOfOn=_mgrOfOn;window._underOn=_underOn;window.isMgr=isMgr;window.visU=visU;window.isHR=isHR;window._canReport=_canReport;window.activeProfile=activeProfile;window.userProfileId=userProfileId;window.userProfile=userProfile;window._ensureHrm=_ensureHrm;window.isDesc=isDesc;window.uById=uById;window.clById=clById;window.locById=locById;window.myCls=myCls;window.subFor=subFor;window.subForCl=subForCl;
+window.log=log;window.LS_KEY=LS_KEY;window.saveDB=saveDB;window.loadDB=loadDB;window.S=S;window.me=me;window.isAdmin=isAdmin;window._pidOf=_pidOf;window.isSuperU=isSuperU;window.roleName=roleName;window.hasDocAccess=hasDocAccess;window.subTree=subTree;window._mgrOfOn=_mgrOfOn;window._underOn=_underOn;window.isMgr=isMgr;window.visU=visU;window.isHR=isHR;window._canReport=_canReport;window.activeProfile=activeProfile;window.userProfileId=userProfileId;window.userProfile=userProfile;window._ensureHrm=_ensureHrm;window.isDesc=isDesc;window.uById=uById;window.clById=clById;window.locById=locById;window.myCls=myCls;window.subFor=subFor;window.subForCl=subForCl;window.runSub=runSub;

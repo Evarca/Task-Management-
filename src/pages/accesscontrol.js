@@ -4,7 +4,7 @@
 /* ═══════ ACCESS CONTROL v3 — ROLES first ═══════
    Two tabs. ROLES: create/edit named roles — each role is a full toggle set over every tab,
    feature and action (incl. all HR modules). PEOPLE: assign a role to each person in ONE click,
-   plus per-person switches (submission rules, approvals, HR-approver stage, cities, document
+   plus per-person switches (submission rules, approvals, client access, document
    access) and optional per-area OVERRIDES that beat the role. Staged edits — Save applies.
    Guard rails: the LAST person with Access Control can never lose it (any path). */
 window._ACD=null; // per-user draft: {uid,perms(overrides),rules,approval,isHR,cities,docAccess,dirty}
@@ -118,8 +118,8 @@ App._renderACUser=()=>{
         ${_acTogBtn(ap.edited===true,'Edited entry',`App._acAppr('edited')`,dis)}
       </div></div>
 
-      <div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--c-text)">City access <span style="font-weight:500;color:var(--c-text-3)">(none = all)</span></div>
-        <div style="display:flex;flex-wrap:wrap;gap:5px">${(DB.locations||[]).filter(l=>l.status==='Active').map(l=>_acTogBtn((d.cities||[]).includes(l.id),l.name,`App._acCity('${l.id}')`,dis)).join('')||'<span style="font-size:11px;color:var(--c-text-3)">No locations.</span>'}</div>
+      <div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--c-text)">Client access <span style="font-weight:500;color:var(--c-text-3)">(none selected = every client)</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">${(DB.locations||[]).filter(l=>l.status==='Active').map(l=>_acTogBtn((d.cities||[]).includes(l.id),l.name,`App._acCity('${l.id}')`,dis)).join('')||'<span style="font-size:11px;color:var(--c-text-3)">No clients yet.</span>'}</div>
       </div>
     </div>`;
   const da=d.docAccess||{departments:{},locations:{}};
@@ -136,9 +136,9 @@ App._renderACUser=()=>{
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px 20px;margin-bottom:10px">
       ${(DB.departments||[]).map(dp=>docRow('departments',dp.id,dp.name)).join('')||'<span style="font-size:11px;color:var(--c-text-3)">No departments.</span>'}
     </div>
-    <div style="font-size:11px;font-weight:800;color:var(--c-text-3);margin:2px 0 4px">Locations</div>
+    <div style="font-size:11px;font-weight:800;color:var(--c-text-3);margin:2px 0 4px">Clients</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px 20px;margin-bottom:14px">
-      ${(DB.locations||[]).filter(l=>l.status==='Active').map(l=>docRow('locations',l.id,l.name)).join('')||'<span style="font-size:11px;color:var(--c-text-3)">No locations.</span>'}
+      ${(DB.locations||[]).filter(l=>l.status==='Active').map(l=>docRow('locations',l.id,l.name)).join('')||'<span style="font-size:11px;color:var(--c-text-3)">No clients yet.</span>'}
     </div>`;
   // per-area overrides: follows role by default; Override copies the role's area for editing
   const groups={};_tmAreas().forEach(a=>{(groups[a.group||'System']=groups[a.group||'System']||[]).push(a);});
@@ -150,7 +150,7 @@ App._renderACUser=()=>{
       const body=ov
         ?`<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
             ${a.actions.map(act=>_acTogBtn(!!(ov.actions||{})[act],PERM_ACTION_LABEL[act]||act,`App._acT('${a.key}','${act}')`,dis)).join('')}
-            ${a.scoped?`<select ${dis?'disabled':''} onchange="App._acScope('${a.key}',this.value)" class="ui-select" style="width:auto;font-size:11px;padding:3px 24px 3px 8px;min-height:0;height:25px">${SCOPE_ORDER.map(s=>`<option value="${s}" ${((ov.scope||'none')===s)?'selected':''}>${SCOPE_LABEL[s]}</option>`).join('')}</select>`:''}
+            ${a.scoped?`<select ${dis?'disabled':''} onchange="App._acScope('${a.key}',this.value)" class="ui-select" style="width:auto;font-size:11px;padding:3px 24px 3px 8px;min-height:0;height:25px">${_scopeOpts(ov.scope)}</select>`:''}
             ${canMng?`<button onclick="App._acOvRm('${a.key}')" style="font-size:10.5px;font-weight:700;color:var(--c-danger-ink);background:none;border:none;cursor:pointer;padding:2px 6px">✕ Remove override</button>`:''}
           </div>`
         :`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -257,6 +257,15 @@ App._acSave=()=>{
   _ACD=null;
   saveDB();closeModal();toast('Access saved for '+fullName(u));rr();
 };
+/* Options for a scope <select>. Only the choices that still resolve are offered, but a value
+   already stored on a bundle is always included so opening the editor can never silently
+   change it to something else. */
+function _scopeOpts(cur){
+  const v=cur||'none';
+  const list=SCOPE_CHOICES.includes(v)?SCOPE_CHOICES:[...SCOPE_CHOICES,v];
+  return list.map(s=>`<option value="${s}" ${v===s?'selected':''}>${esc(SCOPE_LABEL[s]||s)}</option>`).join('');
+}
+
 /* ─────────────── ROLES TAB ─────────────── */
 function _acRolesTab(){
   const canMng=can('accessControl','manage');
@@ -309,7 +318,7 @@ App._renderRPEdit=()=>{
         <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)} ${nOn?`<span style="font-size:9px;font-weight:800;color:#0B7A55">${nOn} on</span>`:''}</div><div style="font-size:10px;color:var(--c-text-3);line-height:1.3">${esc(a.desc)}</div></div>
         <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
           ${a.actions.map(act=>_acTogBtn(!!(cur.actions||{})[act],PERM_ACTION_LABEL[act]||act,`App._rpT('${a.key}','${act}')`,dis)).join('')}
-          ${a.scoped?`<span style="font-size:9.5px;color:var(--c-text-3)">sees:</span><select ${dis?'disabled':''} onchange="App._rpScope('${a.key}',this.value)" class="ui-select" style="width:auto;font-size:11px;padding:3px 24px 3px 8px;min-height:0;height:25px">${SCOPE_ORDER.map(s=>`<option value="${s}" ${((cur.scope||'none')===s)?'selected':''}>${SCOPE_LABEL[s]}</option>`).join('')}</select>`:''}
+          ${a.scoped?`<span style="font-size:9.5px;color:var(--c-text-3)">sees:</span><select ${dis?'disabled':''} onchange="App._rpScope('${a.key}',this.value)" class="ui-select" style="width:auto;font-size:11px;padding:3px 24px 3px 8px;min-height:0;height:25px">${_scopeOpts(cur.scope)}</select>`:''}
         </div>
       </div>`;
     }).join('');
@@ -410,7 +419,7 @@ const _AC_ROUTES=[
   ['Dashboard & Inbox',[['My Day','dashboard','view'],['Company dashboard','analytics','view'],['Approvals inbox','approvals','view']]],
   ['Work & Content',[['My checklists',null,null],['Checklist builder','checklists','create'],['All results','allChecklists','view'],['Team view','teamview','view'],['Questions','questions','view'],['Tickets','tickets','view'],['Announcements','announcements','view']]],
   ['People & Org',[['People directory','employees','view'],['Hierarchy','hierarchy','view']]],
-  ['Administration',[['Departments','departments','view'],['Locations','locations','view'],['Audit log','audit','view'],['Settings','settings','view'],['Access Control','accessControl','view']]],
+  ['Administration',[['Departments','departments','view'],['Clients','locations','view'],['Audit log','audit','view'],['Settings','settings','view'],['Access Control','accessControl','view']]],
 ];
 function _acEffArea(u,areaKey){
   const o=_userPermArea(u,areaKey);
@@ -469,4 +478,4 @@ App._rpNewChooser=()=>{
 };
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.accessControlPage=accessControlPage;window._acPeopleTab=_acPeopleTab;window._acDraft=_acDraft;window._acTogBtn=_acTogBtn;window._acGuard=_acGuard;window._acMark=_acMark;window._acPushProfile=_acPushProfile;window._acRolesTab=_acRolesTab;window._syncRoleProfiles=_syncRoleProfiles;window._acPushHrm=_acPushHrm;
+window.accessControlPage=accessControlPage;window._acPeopleTab=_acPeopleTab;window._acDraft=_acDraft;window._acTogBtn=_acTogBtn;window._acGuard=_acGuard;window._acMark=_acMark;window._acPushProfile=_acPushProfile;window._scopeOpts=_scopeOpts;window._acRolesTab=_acRolesTab;window._syncRoleProfiles=_syncRoleProfiles;window._acPushHrm=_acPushHrm;

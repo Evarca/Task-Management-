@@ -95,10 +95,10 @@ App.newAnnouncement=()=>{
   const locs=DB.locations.filter(l=>l.status!=='Inactive').map(l=>[l.id,l.name]);
   modalShell({title:'New announcement',size:'max-w-lg',
     body:`<div style="display:flex;flex-direction:column;gap:14px">
-      ${fld('Title','an-t','','text','e.g. Office closed on Friday')}
+      ${fld('Title','an-t','','text','e.g. New filing deadline on Friday')}
       <div><label for="an-b" class="ui-label">Message</label><textarea id="an-b" rows="5" placeholder="Write your announcement…" class="ui-input rf"></textarea></div>
       ${selF('Target department (optional)','an-dep',[['','Everyone'],...deps])}
-      ${selF('Target office (optional)','an-loc',[['','All offices'],...locs])}
+      ${selF('Target client (optional)','an-loc',[['','All clients'],...locs])}
       <p style="font-size:11px;color:var(--c-text-3)">Leave targets blank to reach everyone. Targeted users get an in-app notification (and an email if HR email is enabled).</p>
     </div>`,
     footer:btnG('Cancel','App.closeModal()')+btnP('Post','App.postAnnouncement()')});

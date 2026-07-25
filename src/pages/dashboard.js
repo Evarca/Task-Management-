@@ -1,34 +1,121 @@
 
 
-/* ── TODAY'S CHECKLIST LOAD — one source of truth for the day's completion numbers ──
-   The widget cells and the drill-down lists both read this, so a count can never
-   disagree with the names behind it. */
-function _todayLoad(){
-  const d=todayISO();
-  const act=DB.users.filter(u=>u.status==='Active');
-  const DONE=[],DUE=[],CLEAR=[];
-  act.forEach(u=>{
-    const cls=myCls(u.id,d);
-    if(!cls.length){CLEAR.push(u);return;}
-    const open=cls.filter(c=>!subForCl(c,u.id,d));
-    (open.length?DUE:DONE).push(u);
+/* ── CHECKLIST OVERVIEW ──
+   The state of the WORK, not of the people. One entry per checklist running on the given
+   day: how many of its questions are answered, whether it has been submitted, whether it
+   is past its deadline, and who has contributed so far. */
+function _clOverview(date){
+  const d=date||todayISO();
+  const seesAll=isAdmin()||scopeOf('checklists')==='everyone';
+  const f=scopeFilter('checklists');
+  return (DB.checklists||[]).filter(c=>{
+    if(c.status==='Draft')return false;
+    if(!clOn(c,d))return false;
+    if(seesAll)return true;
+    return c.createdBy===S.uid||(c.assignees||[]).includes(S.uid)||(c.assignees||[]).some(a=>f(a));
+  }).map(c=>{
+    const prog=_ansProgress(c,d);
+    const sub=runSub(c.id,d);
+    const submitted=!!sub&&sub.status!=='Editing';
+    const overdue=!submitted&&_clOverdue(c,d);
+    const state=submitted?(sub.status==='Pending Approval'?'Awaiting approval':'Submitted')
+      :overdue?'Overdue':prog.done?'In progress':'Not started';
+    return{c,date:d,prog,sub,submitted,overdue,state,contributors:_ansContributors(c.id,d),
+      pct:prog.total?Math.round(prog.done/prog.total*100):(submitted?100:0)};
+  }).sort((a,b)=>{
+    const rank={'Overdue':0,'In progress':1,'Not started':2,'Awaiting approval':3,'Submitted':4};
+    return (rank[a.state]-rank[b.state])||String(a.c.name).localeCompare(String(b.c.name));
   });
-  return{DONE,DUE,CLEAR,date:d};
 }
-function _todayLoadWidget(){
-  const {DONE,DUE,CLEAR,date}=_todayLoad();
-  const d=date;
-  const assigned=DB.checklists.filter(c=>clOn(c,d));
-  const late=DB.submissions.filter(s=>s.date===d&&s.status==='Late').length;
-  const cell=(label,arr,fg,drill)=>`<div ${drill?`onclick="App._dashDrill('${drill}')" role="button" tabindex="0" title="Tap for the list"`:''} style="flex:1;min-width:105px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 12px;${drill?'cursor:pointer':''}">
-    <div style="display:flex;align-items:baseline;gap:6px"><span class="fd" style="font-size:19px;font-weight:800;color:${fg}">${arr.length}</span><span style="font-size:11px;font-weight:700;color:var(--c-text-2)">${label}</span></div>
-    <div style="display:flex;margin-top:6px">${arr.slice(0,6).map(u=>`<span style="margin-right:-6px" title="${esc(fullName(u))}">${avatar(u,'w-6 h-6','text-[9px]')}</span>`).join('')||'<span style="font-size:11px;color:var(--c-text-3)">—</span>'}${arr.length>6?`<span style="margin-left:10px;font-size:10px;color:var(--c-text-3);align-self:center">+${arr.length-6}</span>`:''}</div>
+const _CL_STATE_TONE={'Overdue':['#FEF2F2','#DC2626'],'In progress':['#EFF6FF','#1D4ED8'],'Not started':['#F9FAFB','#6B7280'],'Awaiting approval':['#FFF7ED','#C2410C'],'Submitted':['#F0FDF4','#15803D']};
+/* The headline strip: where today's checklists stand. */
+function _clOverviewWidget(date){
+  const rows=_clOverview(date);
+  const d=date||todayISO();
+  const by=st=>rows.filter(r=>r.state===st).length;
+  const cell=(label,n,fg,drill)=>`<div ${drill?`onclick="App._dashDrill('${drill}')" role="button" tabindex="0" title="Tap for the list"`:''} style="flex:1;min-width:118px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:11px 13px;${drill?'cursor:pointer':''}">
+    <div class="fd" style="font-size:21px;font-weight:800;color:${fg};line-height:1">${n}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--c-text-2);margin-top:4px">${label}</div>
   </div>`;
   return `<div class="ui-card" style="padding:14px;margin-bottom:16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div class="fd" style="font-size:13.5px;font-weight:800;color:var(--c-text)">Today — where the work stands</div><span style="font-size:11px;color:var(--c-text-3)">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})} · ${assigned.length} checklist${assigned.length===1?'':'s'} running${late?' · '+late+' late':''}</span></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">${cell('All done',DONE,'var(--c-success-ink)','day-done')}${cell('Still open',DUE,'var(--c-danger-ink)','day-due')}${cell('Nothing due',CLEAR,'var(--c-text-3)','day-clear')}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+      <div class="fd" style="font-size:13.5px;font-weight:800;color:var(--c-text)">Checklists today</div>
+      <span style="font-size:11px;color:var(--c-text-3)">${new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})} · ${rows.length} running</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${cell('Submitted',by('Submitted')+by('Awaiting approval'),'var(--c-success-ink)','cl-done')}
+      ${cell('In progress',by('In progress'),'#1D4ED8','cl-progress')}
+      ${cell('Not started',by('Not started'),'var(--c-text-3)','cl-notstarted')}
+      ${cell('Overdue',by('Overdue'),by('Overdue')?'var(--c-danger-ink)':'var(--c-text-3)','cl-overdue')}
+    </div>
   </div>`;
 }
+/* The overview table itself — the thing the client asked to see on the dashboard. */
+function _clOverviewTable(date,opt){
+  const o=opt||{};
+  const rows=_clOverview(date);
+  const d=date||todayISO();
+  if(!rows.length)return `<div class="ui-card" style="padding:34px 20px;text-align:center">
+    <div style="width:52px;height:52px;border-radius:14px;background:var(--c-surface-2);color:var(--c-text-3);display:grid;place-items:center;margin:0 auto 12px">${ic('list','w-6 h-6')}</div>
+    <div class="fd" style="font-size:15px;font-weight:800;color:var(--c-text)">No checklists scheduled</div>
+    <p style="font-size:12.5px;color:var(--c-text-3);margin-top:4px">Nothing is due on this date.</p></div>`;
+  const row=r=>{
+    const [bg,fg]=_CL_STATE_TONE[r.state]||['#F9FAFB','#6B7280'];
+    const dl=_clDeadlineLabel(r.c);
+    return `<tr class="hover:bg-ink-50/50" style="cursor:pointer" onclick="App._clDrill('${r.c.id}','${d}')">
+      <td class="px-4 py-3">
+        <div style="font-size:13.5px;font-weight:700;color:var(--c-text)">${esc(r.c.name)}</div>
+        <div style="font-size:11px;color:var(--c-text-3);margin-top:2px">${esc(r.c.department||'—')}${dl?' · due '+esc(dl):''}</div>
+      </td>
+      <td class="px-4 py-3" style="white-space:nowrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:70px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;width:${r.pct}%;background:${r.pct>=100?'#0E9F6E':r.pct>0?'#0EA5E9':'#E5E7EB'}"></div></div>
+          <span style="font-size:12px;font-weight:700;color:var(--c-text-2)">${r.prog.done}/${r.prog.total||0}</span>
+        </div>
+      </td>
+      <td class="px-4 py-3">
+        ${r.contributors.length?`<span style="display:inline-flex" title="${esc(r.contributors.map(fullName).join(', '))}">${r.contributors.slice(0,4).map(u=>`<span style="margin-right:-6px">${avatar(u,'w-6 h-6','text-[9px]')}</span>`).join('')}${r.contributors.length>4?`<span style="margin-left:10px;font-size:10px;color:var(--c-text-3);align-self:center">+${r.contributors.length-4}</span>`:''}</span>`:'<span style="font-size:12px;color:var(--c-text-3)">—</span>'}
+      </td>
+      <td class="px-4 py-3" style="white-space:nowrap"><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${bg};color:${fg}">${r.state}</span></td>
+    </tr>`;
+  };
+  return `<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden${o.mt?' mt-4':''}">
+    <div class="px-5 py-3 border-b border-ink-100 flex items-center justify-between gap-3 flex-wrap">
+      <h3 class="fd font-semibold text-sm">${esc(o.title||'Checklist overview')}</h3>
+      <span style="font-size:11.5px;color:var(--c-text-3)">${rows.length} checklist${rows.length===1?'':'s'} · tap a row for detail</span>
+    </div>
+    <div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left">
+        <th class="px-4 py-2.5 font-semibold">Checklist</th>
+        <th class="px-4 py-2.5 font-semibold">Answers in</th>
+        <th class="px-4 py-2.5 font-semibold">Who</th>
+        <th class="px-4 py-2.5 font-semibold">Status</th>
+      </tr></thead>
+      <tbody class="divide-y divide-ink-50">${rows.map(row).join('')}</tbody>
+    </table></div>
+  </div>`;
+}
+/* Question-by-question detail for one checklist run. */
+App._clDrill=(clId,date)=>{
+  const c=clById(clId);if(!c)return;
+  const d=date||todayISO();
+  const qs=_clQuestions(c);
+  const body=qs.length?qs.map(q=>{
+    const a=_ansFor(clId,d,q.id);
+    const by=a?uById(a.submittedBy):null;
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--c-border)">
+      <span style="width:22px;height:22px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;background:${a?'#ECFDF5':'#F3F4F6'};color:${a?'#0B7A55':'#9CA3AF'}">${a?ic('check','w-3 h-3'):ic('clock','w-3 h-3')}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600;color:var(--c-text)">${esc(q.text)}</div>
+        ${a?`<div style="font-size:12px;color:var(--c-text-2);margin-top:2px"><strong>${esc(String(a.response??'—'))}</strong> · ${esc(by?fullName(by):'Unknown')} · ${a.submittedAt?new Date(a.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</div>`
+          :'<div style="font-size:11.5px;color:var(--c-text-3);margin-top:2px">Not answered yet</div>'}
+      </div>
+    </div>`;}).join(''):'<p style="font-size:13px;color:var(--c-text-3);text-align:center;padding:18px">This checklist has no questions.</p>';
+  const prog=_ansProgress(c,d);
+  modalShell({title:c.name,sub:fmtD(d)+' · '+prog.done+'/'+prog.total+' answers in'+(_clDeadlineLabel(c)?' · due '+_clDeadlineLabel(c):''),size:'max-w-md',
+    body:body,
+    footer:btnG('Close','App.closeModal()')+btnP('Open checklists',"App.closeModal();App.go('allcl')")});
+};
 
 /* ── SETUP GUIDE — a living checklist on the admin dashboard: what to configure next, one click away.
       Auto-checks real data; disappears forever once complete (or when dismissed). ── */
@@ -43,7 +130,7 @@ function _setupGuideWidget(){
     ['Create the first checklist',(DB.checklists||[]).length>0,'checklists'],
     ['Build the question bank',(DB.questions||[]).length>0,'questions'],
     ['Assign a checklist to someone',(DB.checklists||[]).some(c=>(c.assignees||[]).length>0),'checklists'],
-    ['Add your office locations',(DB.locations||[]).some(l=>l.status==='Active'),'locations'],
+    ['Add your clients',(DB.locations||[]).some(l=>l.status==='Active'),'locations'],
   ];
   const done=items.filter(i=>i[1]).length;
   if(done===items.length)return'';
@@ -104,21 +191,20 @@ App._dashDrill=(kind)=>{
   }else if(kind==='unassigned'){
     title='Unassigned tickets';route='tickets';routeLbl='Open Tickets';
     rows=(DB.tickets||[]).filter(x=>!x.assignedTo&&(x.status==='Open'||x.status==='In Progress')).map(x=>row('',esc(x.title||('#'+String(x.id||'').slice(-6))),(x.priority?esc(x.priority)+' priority':'')+(x.createdAt?' · raised '+fmtS(String(x.createdAt).slice(0,10)):'')));
-  }else if(kind==='day-due'){
-    title='Still to submit today';route='teamview';routeLbl='Open Team';
-    rows=_todayLoad().DUE.filter(empScope).map(u=>{const open=myCls(u.id,t).filter(c=>!subForCl(c,u.id,t));return uRow(u,open.length+' of '+myCls(u.id,t).length+' outstanding · '+open.slice(0,2).map(c=>esc(c.name)).join(', ')+(open.length>2?' +'+(open.length-2):''));});
-  }else if(kind==='day-done'){
-    title='Finished today';route='teamview';routeLbl='Open Team';
-    rows=_todayLoad().DONE.filter(empScope).map(u=>uRow(u,myCls(u.id,t).length+' checklist'+(myCls(u.id,t).length===1?'':'s')+' complete'));
-  }else if(kind==='day-clear'){
-    title='Nothing scheduled today';
-    rows=_todayLoad().CLEAR.filter(empScope).map(u=>uRow(u,esc(u.position||'—')+(u.department?' · '+esc(u.department):'')));
+  }else if(kind==='cl-done'||kind==='cl-progress'||kind==='cl-notstarted'||kind==='cl-overdue'){
+    const want={'cl-done':['Submitted','Awaiting approval'],'cl-progress':['In progress'],'cl-notstarted':['Not started'],'cl-overdue':['Overdue']}[kind];
+    title={'cl-done':'Submitted today','cl-progress':'In progress','cl-notstarted':'Not started','cl-overdue':'Past their deadline'}[kind];
+    route='allcl';routeLbl='Open All results';
+    rows=_clOverview(t).filter(r=>want.includes(r.state)).map(r=>row(
+      '<span style="width:32px;height:32px;border-radius:9px;background:var(--c-surface-2);color:var(--c-text-2);display:grid;place-items:center;flex-shrink:0">'+ic('list','w-4 h-4')+'</span>',
+      esc(r.c.name),
+      r.prog.done+'/'+r.prog.total+' answers'+(r.c.department?' · '+esc(r.c.department):'')+(_clDeadlineLabel(r.c)?' · due '+esc(_clDeadlineLabel(r.c)):'')));
   }else if(kind==='overdue'){
-    title='Past their deadline today';route='teamview';routeLbl='Open Team';
-    const nowM=nowHM();
-    (DB.checklists||[]).filter(c=>c.scheduleTime&&clOn(c,t)&&nowM>hm2m(c.scheduleTime)).forEach(c=>{
-      (c.assignees||[]).forEach(aid=>{if(subForCl(c,aid,t))return;const u=uById(aid);if(!u||!empScope(u))return;rows.push(uRow(u,esc(c.name)+' · was due '+c.scheduleTime));});
-    });
+    title='Past their deadline';route='allcl';routeLbl='Open All results';
+    rows=_clOverview(t).filter(r=>r.state==='Overdue').map(r=>row(
+      '<span style="width:32px;height:32px;border-radius:9px;background:var(--c-danger-soft);color:var(--c-danger-ink);display:grid;place-items:center;flex-shrink:0">'+ic('alert','w-4 h-4')+'</span>',
+      esc(r.c.name),
+      r.prog.done+'/'+r.prog.total+' answers in · due '+esc(_clDeadlineLabel(r.c)||fmtS(t))));
   }else if(kind==='activeusers'){
     title='Active people';route='users';routeLbl='Open Users';
     rows=actives.filter(u=>scopeFilter('employees')(u.id)).map(u=>uRow(u,esc(u.position||'—')+(u.department?' · '+esc(u.department):'')));
@@ -192,93 +278,63 @@ function _dashTicketsPanel(scopeUsers){
   </div>`;
 }
 
-/* ===== ADMIN DASHBOARD ===== */
-// Dashboard === Analytics for anyone with analytics access; everyone else gets the visual home dashboard.
-function _dashboardPage(){return homeDash();} // hub: Dashboard=My Day for EVERYONE; Company lives on the 'analytics' sub-tab
+/* ===== COMPANY / TEAM DASHBOARD =====
+   Deliberately about the WORK: which checklists are running, how far through they are and
+   which are late. Per-person performance tables are not part of this build — the audit trail
+   on each answer already says who did what, without turning the dashboard into a scoreboard. */
+function _dashboardPage(){return homeDash();} // hub: Dashboard = My Day for everyone; Company lives on the 'analytics' sub-tab
+
 function adminDash(){
   const today=todayISO();
   const fSubs=DB.submissions.filter(s=>_inDashRange(s.date));
   const active=DB.users.filter(u=>u.status==='Active').length;
   const pendA=DB.approvals.filter(a=>a.status==='Pending').length;
   const late=fSubs.filter(s=>s.status==='Late').length;
-  const depts=DB.departments.map(d=>{const us=DB.users.filter(u=>u.department===d.name).length;const cls=DB.checklists.filter(c=>c.department===d.name).length;const ss=fSubs.filter(s=>{const c=clById(s.checklistId);return c?.department===d.name;});return{name:d.name,us,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};}).filter(d=>d.us||d.cls);
+  // Department view stays, but reads as "how much work is landing on time", not per-person.
+  const depts=DB.departments.map(d=>{
+    const cls=DB.checklists.filter(c=>c.department===d.name).length;
+    const ss=fSubs.filter(s=>{const c=clById(s.checklistId);return c&&c.department===d.name;});
+    return{name:d.name,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};
+  }).filter(d=>d.cls||d.total);
   const recent=fSubs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,8);
-  return`<div class="fade">${_setupGuideWidget()}${_todayLoadWidget()}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
+  return`<div class="fade">${_setupGuideWidget()}${_clOverviewWidget(today)}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${_dashFilterBar()}
   ${_pulseStrip()}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-    ${statCard('Active users',active,'sky',"App._dashDrill('activeusers')")}${statCard('Pending approvals',pendA,'amber',"App._dashDrill('approvals')")}${statCard('Late submissions',late,'rose',"App._dashDrill('latesubs')")}
+    ${statCard('Active people',active,'sky',"App._dashDrill('activeusers')")}${statCard('Pending approvals',pendA,'amber',"App._dashDrill('approvals')")}${statCard('Late submissions',late,'rose',"App._dashDrill('latesubs')")}
   </div>
-  <div class="grid lg:grid-cols-3 gap-4">
+  ${_clOverviewTable(today,{title:"Today's checklists"})}
+  <div class="grid lg:grid-cols-3 gap-4 mt-4">
     <div class="lg:col-span-2 bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
-      <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">Department performance</h3></div>
-      <div class="divide-y divide-ink-50">${depts.map(d=>`<div class="px-5 py-3 flex items-center gap-4"><span class="text-sm font-semibold w-32 truncate">${esc(d.name)}</span><div class="flex-1"><div class="pg"><div class="pgf" style="width:${d.total?Math.round(d.onTime/d.total*100):0}%"></div></div></div><span class="text-xs text-ink-400 w-24 text-right shrink-0">${d.us}u · ${d.cls}cl · ${d.late?`<span class="text-rose-600 font-semibold">${d.late} late</span>`:d.total+' sub'}</span></div>`).join('')||empty('dept','No department activity','Department performance appears here once checklists are submitted.')}</div>
+      <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">On-time rate by department</h3></div>
+      <div class="divide-y divide-ink-50">${depts.map(d=>`<div class="px-5 py-3 flex items-center gap-4"><span class="text-sm font-semibold w-32 truncate">${esc(d.name)}</span><div class="flex-1"><div class="pg"><div class="pgf" style="width:${d.total?Math.round(d.onTime/d.total*100):0}%"></div></div></div><span class="text-xs text-ink-400 w-24 text-right shrink-0">${d.cls}cl · ${d.late?`<span class="text-rose-600 font-semibold">${d.late} late</span>`:d.total+' sub'}</span></div>`).join('')||empty('dept','No department activity','Department figures appear here once checklists are submitted.')}</div>
     </div>
     <div class="space-y-4">
       <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
-        <div class="px-4 py-3 border-b border-ink-100 flex justify-between items-center"><h3 class="fd font-semibold text-sm">Recent submissions</h3><button onclick="App.go('dashboard')" class="text-xs font-semibold text-brand-700">View all →</button></div>
-        <div class="divide-y divide-ink-50">${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return'';const cName=c?c.name:'[Deleted]';return`<div class="px-4 py-2.5 flex items-center gap-2.5">${avatar(u,'w-7 h-7','text-[10px]')}<div class="flex-1 min-w-0"><div class="text-xs font-semibold truncate">${esc(fullName(u))}</div><div class="text-[11px] text-ink-400 truncate">${esc(cName)}</div></div>${chip(s.status)}</div>`;}).join('')||empty('check','No submissions yet','Recent checklist submissions will show up here.')}</div>
+        <div class="px-4 py-3 border-b border-ink-100 flex justify-between items-center"><h3 class="fd font-semibold text-sm">Recent submissions</h3><button onclick="App.go('allcl')" class="text-xs font-semibold text-brand-700">View all →</button></div>
+        <div class="divide-y divide-ink-50">${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);const cName=c?c.name:'[Deleted]';return`<div class="px-4 py-2.5 flex items-center gap-2.5">${u?avatar(u,'w-7 h-7','text-[10px]'):''}<div class="flex-1 min-w-0"><div class="text-xs font-semibold truncate">${esc(cName)}</div><div class="text-[11px] text-ink-400 truncate">${esc(u?fullName(u):'—')} · ${fmtS(s.date)}</div></div>${chip(s.status)}</div>`;}).join('')||empty('check','No submissions yet','Recent checklist submissions will show up here.')}</div>
       </div>
       ${_dashTicketsPanel(null)}
     </div>
   </div>
-  <!-- All users performance (range-aware) -->
-  ${(()=>{
-    const aRows=DB.users.filter(u=>u.status==='Active').map(u=>{
-      const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;
-      const ss=fSubs.filter(s=>s.userId===u.id);
-      const lateU=ss.filter(s=>s.status==='Late').length;
-      const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;
-      const tk=(DB.tickets||[]).filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length;
-      const todayAsgnCls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO()));
-      const todayAsgn=todayAsgnCls.length;
-      // Effective completions for today: own submission, OR for "any one" group checklists
-      // any assignee's completed submission counts as done for this user (Fix #2).
-      const todayDone=todayAsgnCls.filter(c=>subForCl(c,u.id,todayISO())).length;
-      const pct=todayAsgn?Math.round(todayDone/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
-      return{u,asgn,total:ss.length,late:lateU,pend,tk,pct};
-    }).sort((a,b)=>fullName(a.u).localeCompare(fullName(b.u)));
-    return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden mt-4">
-    <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">All users performance</h3></div>
-    <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Member</th><th class="px-4 py-2.5 font-semibold">Assigned</th><th class="px-4 py-2.5 font-semibold">Submitted</th><th class="px-4 py-2.5 font-semibold">Late</th><th class="px-4 py-2.5 font-semibold">Pending</th><th class="px-4 py-2.5 font-semibold" title="Open + In Progress tickets assigned to this member">Tickets</th><th class="px-4 py-2.5 font-semibold">Completion</th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${aRows.map(({u,asgn,total,late:lt,pend,tk,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span></div></td><td class="px-4 py-2.5 text-sm">${asgn}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${lt?'text-rose-600 font-semibold':''} text-sm">${lt}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5">${tk?`<span onclick="App.go('tickets')" title="${tk} open ticket${tk!==1?'s':''} — not completed" style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 8px;border-radius:12px;font-size:12px;font-weight:800;cursor:pointer;background:${tk>=5?'#FFEDED':'#FEF7E6'};color:${tk>=5?'#C92C2C':'#B36A00'}">${tk}</span>`:`<span class="text-sm text-ink-300">0</span>`}</td><td class="px-4 py-2.5"><div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div></td></tr>`).join('')}</tbody></table></div>
-  </div>`;
-  })()}
   </div>`;}
 
 /* ===== MANAGER DASHBOARD ===== */
 function mgrDash(){
   const team=subTree(S.uid);if(!team.length)return myClsPage();
-  const teamIds=new Set(team.map(u=>u.id));
-  // Former direct reports (manager changed away) — shown only if they have in-range data from their time under me
-  const former=DB.users.filter(u=>!teamIds.has(u.id)&&u.id!==S.uid&&Array.isArray(u.managerHistory)&&u.managerHistory.some(p=>p.managerId===S.uid));
-  const mkRow=(u,cur)=>{
-    // Only count submissions from dates the user was actually under me (handles transfers in AND out)
-    const ss=DB.submissions.filter(s=>s.userId===u.id&&_inDashRange(s.date)&&_underOn(u.id,S.uid,s.date));
-    const late=ss.filter(s=>s.status==='Late').length;
-    const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;
-    if(!cur)return ss.length?{u,cur,asgn:null,total:ss.length,late,pend,tk:null,pct:null}:null;
-    const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;
-    const tk=(DB.tickets||[]).filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length;
-    const todayAsgnCls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO()));
-    const todayAsgn=todayAsgnCls.length;
-    const todayDone=todayAsgnCls.filter(c=>subForCl(c,u.id,todayISO())).length;
-    const pct=todayAsgn?Math.round(todayDone/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
-    return{u,cur,asgn,total:ss.length,late,pend,tk,pct};
-  };
-  const rows=[...team.map(u=>mkRow(u,true)),...former.map(u=>mkRow(u,false))].filter(Boolean);
-  const curRows=rows.filter(r=>r.cur);
-  return`<div class="fade">${_todayLoadWidget()}${hdr('Team Dashboard',team.length+' member'+(team.length!==1?'s':''))}
+  const today=todayISO();
+  const pendA=_approvalPendingCount();
+  const rows=_clOverview(today);
+  const overdue=rows.filter(r=>r.state==='Overdue').length;
+  const openTk=(DB.tickets||[]).filter(t=>(t.status==='Open'||t.status==='In Progress')&&team.some(u=>u.id===t.assignedTo)).length;
+  return`<div class="fade">${_clOverviewWidget(today)}${hdr('Team Dashboard',team.length+' member'+(team.length!==1?'s':''))}
   ${_dashFilterBar()}
   ${_pulseStrip()}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-    ${statCard('Team members',team.length,'sky',"App.go('teamview')")}${statCard('Late submissions',rows.reduce((n,r)=>n+r.late,0),'rose',"S.filters={stats:['Late']};App.go('dashboard')")}${statCard('Avg completion',Math.round(curRows.reduce((n,r)=>n+r.pct,0)/Math.max(curRows.length,1))+'%','brand',"App.go('dashboard')")}
+    ${statCard('Team members',team.length,'sky',"App.go('teamview')")}${statCard('Overdue today',overdue,'rose',"App._dashDrill('cl-overdue')")}${statCard('Waiting on you',pendA,'amber',"App.go('approvals')")}${statCard('Open tickets',openTk,'brand',"App.go('tickets')")}
   </div>
-  <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden mb-4">
-    <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">Team performance</h3></div>
-    <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Member</th><th class="px-4 py-2.5 font-semibold">Assigned</th><th class="px-4 py-2.5 font-semibold">Submitted</th><th class="px-4 py-2.5 font-semibold">Late</th><th class="px-4 py-2.5 font-semibold">Pending</th><th class="px-4 py-2.5 font-semibold" title="Open + In Progress tickets assigned to this member">Tickets</th><th class="px-4 py-2.5 font-semibold">Completion</th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${rows.map(({u,cur,asgn,total,late,pend,tk,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span>${cur?'':'<span title="No longer reports to you — showing data from when they did" style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:#F3F4F6;color:#6B7280">former</span>'}</div></td><td class="px-4 py-2.5 text-sm">${cur?asgn:'<span class="text-ink-300">—</span>'}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${late?'text-rose-600 font-semibold':''} text-sm">${late}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5">${cur?(tk?`<span onclick="App.go('tickets')" title="${tk} open ticket${tk!==1?'s':''} — not completed" style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 8px;border-radius:12px;font-size:12px;font-weight:800;cursor:pointer;background:${tk>=5?'#FFEDED':'#FEF7E6'};color:${tk>=5?'#C92C2C':'#B36A00'}">${tk}</span>`:`<span class="text-sm text-ink-300">0</span>`):'<span class="text-ink-300">—</span>'}</td><td class="px-4 py-2.5">${cur?`<div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div>`:'<span class="text-ink-300">—</span>'}</td></tr>`).join('')}</tbody></table></div>
-  </div></div>`;}
+  ${_clOverviewTable(today,{title:"Today's checklists"})}
+  </div>`;}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._todayLoad=_todayLoad;window._todayLoadWidget=_todayLoadWidget;window._setupGuideWidget=_setupGuideWidget;window._pulseStrip=_pulseStrip;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;
+window._clOverview=_clOverview;window._clOverviewWidget=_clOverviewWidget;window._clOverviewTable=_clOverviewTable;window._CL_STATE_TONE=_CL_STATE_TONE;window._setupGuideWidget=_setupGuideWidget;window._pulseStrip=_pulseStrip;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;

@@ -21,8 +21,12 @@ function clOn(c,date){if(c.status&&c.status!=='Active')return false;
   const dy=dayAbbr(date);
   const dn=new Date(date+'T00:00:00').getDate();
   if(c.frequency==='Daily'){
+    /* Daily means every day. The builder no longer offers a weekday sub-choice, but a row saved
+       by an older build (or by the full platform against the same database) can still carry one —
+       honour it rather than silently changing that checklist's schedule. Re-saving it here
+       normalises it away. */
     if(!c.schedule||c.schedule==='Every day')return true;
-    return(c.selectedDays||[]).includes(dy);
+    return(c.selectedDays||[]).length?(c.selectedDays||[]).includes(dy):true;
   }
   if(c.frequency==='Weekly')return(c.selectedDays||[]).includes(dy);
   if(c.frequency==='Monthly'){
@@ -99,6 +103,7 @@ const I={
   help:`<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/>`,
   ticket:`<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 17v2M13 11v2"/>`,
   eye:`<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`,
+  eyeOff:`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`,
   user:`<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
   download:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
   upload:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>`,
@@ -147,6 +152,42 @@ const fld=(l,id,v='',t='text',p='')=>`<div><label for="${id}" class="ui-label">$
 const selF=(l,id,opts,sv='')=>`<div><label for="${id}" class="ui-label">${l}</label><select id="${id}" class="ui-select rf">${opts.map(o=>`<option value="${esc(Array.isArray(o)?o[0]:o)}" ${(Array.isArray(o)?o[0]:o)===sv?'selected':''}>${esc(Array.isArray(o)?o[1]:o)}</option>`).join('')}</select></div>`;
 function mkTog(id,on,label){return`<div class="flex items-center justify-between" style="padding:7px 0;min-height:40px"><span style="font-size:14px;color:var(--c-text)">${label}</span><button id="${id}" role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="this.classList.toggle('on');this.classList.toggle('off');this.setAttribute('aria-checked',this.classList.contains('on'))"><span></span></button></div>`;}
 /* card(inner,{pad,head,headRight,attrs}) — standard surface */
+/* Password field with a show/hide eye. Same shape as fld() so it drops straight in, but the
+   input sits in a relative wrapper with the toggle pinned to the right; the button swaps the
+   input's type rather than re-rendering, so the caret and any typed value survive. */
+function fldPw(label,id,val,ph,hint){
+  return `<div>
+    <label for="${id}" class="block text-xs font-semibold text-ink-500 mb-1.5">${esc(label)}</label>
+    <div style="position:relative">
+      <input id="${id}" type="password" value="${esc(val||'')}" placeholder="${esc(ph||'')}" autocomplete="new-password"
+        class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf" style="padding-right:44px"/>
+      <button type="button" tabindex="-1" aria-label="Show password" title="Show password"
+        onclick="App._togPw('${id}',this)"
+        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;display:grid;place-items:center;border:none;background:transparent;color:var(--c-text-3);cursor:pointer;border-radius:8px">${ic('eye','w-4 h-4')}</button>
+    </div>
+    ${hint?`<p class="text-[11px] text-ink-400 mt-1">${esc(hint)}</p>`:''}
+  </div>`;
+}
+/* ── CLIENTS ──
+   A client is attached to a CHECKLIST (c.locationIds). Everything else — a submission, a
+   ticket, an answer — reaches its client through the checklist it belongs to, which is why
+   these three helpers exist rather than a client field on every record. */
+const clientsOf=c=>(((c&&c.locationIds)||[]).map(id=>locById(id)).filter(Boolean));
+const clientIdsOf=c=>(((c&&c.locationIds)||[]).slice());
+const clientIdsOfTicket=t=>{const c=(t&&t.checklistId)?clById(t.checklistId):null;return c?clientIdsOf(c):[];};
+/* True when the record belongs to the selected client (empty selection = no filtering). */
+const matchesClient=(ids,sel)=>!sel||(ids||[]).includes(sel);
+/* One consistent Client <select> for every filter bar. */
+function clientFilter(filterKey,style){
+  const opts=(DB.locations||[]).filter(l=>l.status!=='Inactive').sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  if(!opts.length)return'';
+  const cur=(S.filters||{})[filterKey]||'';
+  return `<select onchange="S.filters.${filterKey}=this.value;rr()" class="ui-select" style="${style||'font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto'}" aria-label="Filter by client">
+    <option value="">All clients</option>
+    ${opts.map(l=>`<option value="${esc(l.id)}" ${cur===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}
+  </select>`;
+}
+
 function card(inner,opts={}){
   const head=opts.head?`<div class="ui-card-head"><span class="ui-card-title">${opts.head}</span>${opts.headRight||''}</div>`:'';
   const body=opts.pad===false?inner:`<div class="ui-card-pad">${inner}</div>`;
@@ -285,7 +326,7 @@ const HOW={
   dashboard:{t:'Your day at a glance: what needs you, what is still open, and quick actions. Most people never need another tab.',d:['Cards show today\'s checklists and the tickets on you — tap either to act.','“My record” is your own submission history over a date range you pick.','Managers and admins also see where the whole team stands today.'],l:[['mychecklists','My Checklists'],['approvals','Approvals']]},
   mychecklists:{t:'Everything assigned to YOU, day by day. Pick a date on the strip; submit each card.',d:['Miss the due time → the card turns LATE (red) and analytics record it.','Whether you may submit past/future dates or edit comes from your Personal settings.','A checklist set to “any one can complete” counts as done once a teammate submits it.'],l:[['tickets','Tickets'],['approvals','Approvals']]},
   tickets:{t:'Issues raised by people or auto-created when a checklist answer breaches a rule.',d:['Bad answers on escalation questions open tickets automatically and re-escalate while open.','Resolve with a note — the submitter is notified.'],l:[['mychecklists','My Checklists'],['questions','Questions']]},
-  announcements:{t:'Company-wide messages. Everyone sees them; admins create them.',d:['Target a department or an office to narrow who gets it.','Recipients get a bell alert, and an email too when announcement email is switched on in Settings.'],l:[['notifications','Notifications'],['settings','Settings']]},
+  announcements:{t:'Company-wide messages. Everyone sees them; admins create them.',d:['Target a department or a client to narrow who gets it.','Recipients get a bell alert, and an email too when announcement email is switched on in Settings.'],l:[['notifications','Notifications'],['settings','Settings']]},
   teamview:{t:'Live board of your team: today\'s checklist status, lates and open tickets per person. Click someone to drill into their calendar.',l:[['users','Users'],['approvals','Approvals']]},
   users:{t:'The people directory: identity, manager, workplace and status.',d:['“Reports to” decides who approves this person\'s submissions and who sees them in Team.','Access is NOT set here — one role per person in Access Control.','Deactivating someone unassigns their open tickets so nothing sits in an unwatched queue.'],l:[['accesscontrol','Access Control'],['hierarchy','Hierarchy']]},
   hierarchy:{t:'The reporting tree, drawn from each person\'s “Reports to”. Fix structure in Users.',l:[['users','Users']]},
@@ -295,7 +336,7 @@ const HOW={
   approvals:{t:'One inbox for every checklist decision waiting on you: submissions and edit requests.',d:['Approve/reject inline; the requester is notified instantly.','Filter by type and use “Approve all” for bulk.'],l:[['teamview','Team'],['mychecklists','My Checklists']]},
   notifications:{t:'Every alert lands here (and is queued for email once a provider is connected). Tap one to jump to the right tab.',l:[['settings','Settings']]},
   analytics:{t:'The company view: on-time rate, submissions by department and person, compliance and tickets — with CSV export.',d:['Every chart is clickable — tap a slice or bar to see the rows behind it.','Filters at the top drive every chart and the export together.'],l:[['allcl','All Checklists'],['tickets','Tickets']]},
-  locations:{t:'Your offices and sites. Assign one to each person, and to the checklists that only run there.',l:[['users','Users'],['checklists','Create Checklist']]},
+  locations:{t:'Your clients. Attach one or more to a checklist so it only runs for that client, and keep their folders and documents here.',d:['Filter any list by client to see just that account’s work.','Each client holds its own folders and files under the Documents tab.'],l:[['checklists','Create Checklist'],['allcl','All Checklists']]},
   departments:{t:'Departments and sub-departments — the grouping behind checklist scope, question sharing and reporting.',l:[['users','Users'],['questions','Questions']]},
   settings:{t:'Notification switches, email templates and the workspace data export.',d:['“In-App” and “Email” toggle individual events; “Feature switches” silences a whole feature at once.','Templates control the wording of every email the app sends.'],l:[['notifications','Notifications']]},
   audit:{t:'Every action anyone takes, filterable by person, department and tab. If you wonder “who changed this?” — the answer is here.',l:[['accesscontrol','Access Control']]},
@@ -356,9 +397,9 @@ function _refLinks(type,id){
     add('Checklists targeting it',DB.checklists.filter(c=>c.department===nm).map(c=>c.name),'Edit the checklist’s department');
     add('Announcements targeting it',(DB.announcements||[]).filter(a=>a.deptTarget===nm).map(a=>a.title),'Delete or retarget the announcement');
   }else if(type==='location'){
-    add('People assigned to it',DB.users.filter(x=>x.hrm&&x.hrm.locationId===id).map(x=>fullName(x)),'Change their office in the user editor');
-    add('Checklists using it',DB.checklists.filter(c=>(c.locationIds||[]).includes(id)).map(c=>c.name),'Edit the checklist’s locations');
-    add('Upcoming shifts there',(DB.shifts||[]).filter(s=>s.locationId===id&&String(s.date||'')>=today).map(s=>{const su=uById(s.userId);return(su?fullName(su):'Shift')+' · '+fmtS(s.date);}),'Move or delete the shifts');
+    add('Checklists attached to it',(DB.checklists||[]).filter(c=>(c.locationIds||[]).includes(id)).map(c=>c.name),'Detach the client in the checklist editor');
+    add('Folders held against it',(DB.tmFolders||[]).filter(f=>f.locationId===id).map(f=>f.name),'Delete the folders first — their files go with them');
+    add('Files held against it',(DB.tmDocuments||[]).filter(d=>d.locationId===id).map(d=>d.name),'Delete the files first');
     add('Announcements targeting it',(DB.announcements||[]).filter(a=>a.locTarget===id).map(a=>a.title),'Delete or retarget the announcement');
   }else if(type==='checklist'){
     const c=clById(id);
@@ -428,10 +469,21 @@ function _draftDelete(kind,refId,date){
   _delRow('drafts',d.id,'draft');
 }
 
+App._togPw=(id,btn)=>{
+  const el=document.getElementById(id);if(!el)return;
+  const show=el.type==='password';
+  el.type=show?'text':'password';
+  btn.setAttribute('aria-label',show?'Hide password':'Show password');
+  btn.setAttribute('title',show?'Hide password':'Show password');
+  btn.innerHTML=ic(show?'eyeOff':'eye','w-4 h-4');
+  btn.style.color=show?'var(--c-brand-ink)':'var(--c-text-3)';
+  try{el.focus();const n=el.value.length;el.setSelectionRange(n,n);}catch(e){}
+};
+
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window._draftStrip=_draftStrip;window._draftFor=_draftFor;window._draftSave=_draftSave;window._draftDelete=_draftDelete;
 window._refLinks=_refLinks;window.guardDelete=guardDelete;
-window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.selF=selF;window.mkTog=mkTog;window.card=card;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;window._howBar=_howBar;
+window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.fldPw=fldPw;window.selF=selF;window.mkTog=mkTog;window.card=card;window.clientsOf=clientsOf;window.clientIdsOf=clientIdsOf;window.clientIdsOfTicket=clientIdsOfTicket;window.matchesClient=matchesClient;window.clientFilter=clientFilter;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;window._howBar=_howBar;
 
 /* Human hours: 2.83 → "2h 50m" (decimals confuse people; CSV exports keep the numbers). */
 function fmtH(h){h=Number(h)||0;const neg=h<0?'-':'';h=Math.abs(h);let H=Math.floor(h),M=Math.round((h-H)*60);if(M===60){H++;M=0;}return neg+H+'h'+(M?' '+M+'m':'');}

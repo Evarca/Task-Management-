@@ -25,16 +25,39 @@ function clsPage(){
   const myTeamIds=new Set([S.uid,...subTree(S.uid).map(u=>u.id)]);
 const _clSc=scopeOf('checklists'),_clScope=scopeFilter('checklists'); // R15: the role's checklists scope decides what a non-super viewer sees
 let list=(isAdmin()||_clSc==='everyone')?DB.checklists:DB.checklists.filter(c=>c.createdBy===S.uid||(c.assignees||[]).includes(S.uid)||(c.assignees||[]).some(a=>_clScope(a)));
-  if(S.search)list=list.filter(c=>(c.name||'').toLowerCase().includes(S.search.toLowerCase())||(c.department||'').toLowerCase().includes(S.search.toLowerCase()));
-  return`<div class="fade">${hdr('Create Checklist',list.length+' configured',can('checklists','create')?btnP('New checklist','App.editCl()','plus'):'')}
+  const total=list.length;
+  const f=S.filters;
+  const q=(f.clbQ!==undefined?f.clbQ:S.search)||'';
+  if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q.toLowerCase())||(c.department||'').toLowerCase().includes(q.toLowerCase()));
+  if(f.clbClient)list=list.filter(c=>matchesClient(clientIdsOf(c),f.clbClient));
+  if(f.clbDep)list=list.filter(c=>(c.department||'')===f.clbDep);
+  if(f.clbFreq)list=list.filter(c=>(c.frequency||'')===f.clbFreq);
+  if(f.clbStatus)list=list.filter(c=>(c.status||'Active')===f.clbStatus);
+  const _deps=[...new Set(DB.checklists.map(c=>c.department).filter(Boolean))].sort();
+  const _selSt='font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto';
+  const _act=!!(f.clbQ||f.clbClient||f.clbDep||f.clbFreq||f.clbStatus);
+  const filterBar=`<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px">
+    <div style="position:relative;flex:1;min-width:180px">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3)">${ic('search','w-4 h-4')}</span>
+      <input id="clb-q" value="${esc(q)}" oninput="S.filters.clbQ=this.value;App._searchRR('clb-q')" placeholder="Search checklists…" class="ui-input" style="padding-left:34px;min-height:0;height:34px;font-size:13px"/>
+    </div>
+    ${clientFilter('clbClient',_selSt)}
+    ${_deps.length?`<select onchange="S.filters.clbDep=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">All departments</option>${_deps.map(d=>`<option value="${esc(d)}" ${f.clbDep===d?'selected':''}>${esc(d)}</option>`).join('')}</select>`:''}
+    <select onchange="S.filters.clbFreq=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">Any frequency</option>${['Daily','Weekly','Monthly','Custom'].map(x=>`<option value="${x}" ${f.clbFreq===x?'selected':''}>${x}</option>`).join('')}</select>
+    <select onchange="S.filters.clbStatus=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">Any status</option>${['Active','Draft','Inactive'].map(x=>`<option value="${x}" ${f.clbStatus===x?'selected':''}>${x}</option>`).join('')}</select>
+    ${_act?`<button onclick="['clbQ','clbClient','clbDep','clbFreq','clbStatus'].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:''}
+    <span style="font-size:11.5px;color:var(--c-text-3);font-weight:600">${list.length} of ${total}</span>
+  </div>`;
+  return`<div class="fade">${hdr('Create Checklist',total+' configured',can('checklists','create')?btnP('New checklist','App.editCl()','plus'):'')}
+  ${filterBar}
   <div class="space-y-2.5">
-    ${list.map(c=>{
+    ${(list.length?list:[]).map(c=>{
       const ass=(c.assignees||[]).map(uById).filter(Boolean);
       const active=clOn(c,todayISO());
       const locs=(c.locationIds||[]).map(locById).filter(Boolean);
-      return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4"><div class="flex items-start gap-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap mb-1"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${active?'bg-brand-50 text-brand-700':'bg-ink-100 text-ink-400'}">${esc(c.frequency)}</span><span class="text-xs text-ink-400">${esc(c.department)}</span>${locs.length?`<span class="text-xs text-sky-600 flex items-center gap-1">${ic('pin','w-3 h-3')}${locs.map(l=>esc(l.name)).join(', ')}</span>`:''}</div><h3 class="fd font-bold">${esc(c.name)}${c.status==='Draft'?'<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:#FEF3C7;color:#92400E;margin-left:6px;vertical-align:middle">DRAFT</span>':''}</h3><p class="text-xs text-ink-400 mt-0.5 line-clamp-1">${esc(c.description||'')}</p><div class="flex items-center gap-3 mt-1.5 text-xs text-ink-400"><span>${ic('clock','w-3 h-3 inline mr-0.5')}${esc(c.schedule||c.frequency)}${c.scheduleTime?' · due '+c.scheduleTime:''}</span>${c.startDate?`<span>${ic('doc','w-3 h-3 inline mr-0.5')}${fmtS(c.startDate)}${c.endDate?' → '+fmtS(c.endDate):''}</span>`:''}</div></div><div class="flex flex-col items-end gap-2 shrink-0">${(isAdmin()||isMgr()||can('checklists','edit'))?`<div class="flex gap-1"><button type="button" onclick="App.editCl('${c.id}')" title="Edit" aria-label="Edit checklist" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='var(--c-surface-2)'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button>${can('checklists','duplicate')?`<button type="button" onclick="App.dupCl('${c.id}')" title="Duplicate" aria-label="Duplicate checklist" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='var(--c-info-soft)';this.style.color='var(--c-info)'" onmouseout="this.style.background='transparent';this.style.color='var(--c-text-3)'">${ic('copy','w-3.5 h-3.5')}</button>`:''}${(isAdmin()||(can('checklists','delete')&&scopeOf('checklists')==='everyone')||(isMgr()&&c.createdBy===S.uid))?`<button type="button" onclick="App.delCl('${c.id}')" title="Delete" aria-label="Delete checklist" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='var(--c-danger-soft)';this.style.color='var(--c-danger)'" onmouseout="this.style.background='transparent';this.style.color='var(--c-text-3)'">${ic('trash','w-3.5 h-3.5')}</button>`:''}</div>`:''}<div class="flex -space-x-1">${ass.slice(0,4).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div></div></div>`;
+      return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4"><div class="flex items-start gap-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap mb-1"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${active?'bg-brand-50 text-brand-700':'bg-ink-100 text-ink-400'}">${esc(c.frequency)}</span><span class="text-xs text-ink-400">${esc(c.department)}</span>${locs.length?`<span class="text-xs text-sky-600 flex items-center gap-1">${ic('pin','w-3 h-3')}${locs.map(l=>esc(l.name)).join(', ')}</span>`:''}</div><h3 class="fd font-bold">${esc(c.name)}${c.status==='Draft'?'<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:#FEF3C7;color:#92400E;margin-left:6px;vertical-align:middle">DRAFT</span>':''}</h3><p class="text-xs text-ink-400 mt-0.5 line-clamp-1">${esc(c.description||'')}</p><div class="flex items-center gap-3 mt-1.5 text-xs text-ink-400"><span>${ic('clock','w-3 h-3 inline mr-0.5')}${esc(c.schedule||c.frequency)}${_clDeadlineLabel(c)?' · due '+esc(_clDeadlineLabel(c)):''}</span>${c.startDate?`<span>${ic('doc','w-3 h-3 inline mr-0.5')}${fmtS(c.startDate)}${c.endDate?' → '+fmtS(c.endDate):''}</span>`:''}</div></div><div class="flex flex-col items-end gap-2 shrink-0">${(isAdmin()||isMgr()||can('checklists','edit'))?`<div class="flex gap-1"><button type="button" onclick="App.editCl('${c.id}')" title="Edit" aria-label="Edit checklist" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='var(--c-surface-2)'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button>${can('checklists','duplicate')?`<button type="button" onclick="App.dupCl('${c.id}')" title="Duplicate" aria-label="Duplicate checklist" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='var(--c-info-soft)';this.style.color='var(--c-info)'" onmouseout="this.style.background='transparent';this.style.color='var(--c-text-3)'">${ic('copy','w-3.5 h-3.5')}</button>`:''}${(isAdmin()||(can('checklists','delete')&&scopeOf('checklists')==='everyone')||(isMgr()&&c.createdBy===S.uid))?`<button type="button" onclick="App.delCl('${c.id}')" title="Delete" aria-label="Delete checklist" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='var(--c-danger-soft)';this.style.color='var(--c-danger)'" onmouseout="this.style.background='transparent';this.style.color='var(--c-text-3)'">${ic('trash','w-3.5 h-3.5')}</button>`:''}</div>`:''}<div class="flex -space-x-1">${ass.slice(0,4).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div></div></div>`;
     }).join('')}
-    ${list.length?'':empty('list','No checklists','Create your first checklist.')}
+    ${list.length?'':(total?empty('search','No checklists match','Try clearing the filters above.'):empty('list','No checklists','Create your first checklist.'))}
   </div></div>`;}
 /* ===== CHECKLIST CREATE / EDIT ===== */
 window.CLD=null;
@@ -100,8 +123,14 @@ function _renderClModal(editing){
           </div>
         </div>
         <div>
-          <label for="cn-time" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Deadline time <span class="font-normal text-ink-300">(marked Late if not submitted by this time)</span></label>
-          <input id="cn-time" type="time" value="${esc(c.scheduleTime||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
+          <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Deadline <span class="font-normal text-ink-300">(both optional — leave blank and it is never marked late)</span></label>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label for="cn-ddate" class="block text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-1">Date</label>
+              <input id="cn-ddate" type="date" value="${esc(_clDeadlineDate(c.id)||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>
+            <div><label for="cn-time" class="block text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-1">Time</label>
+              <input id="cn-time" type="time" value="${esc(c.scheduleTime||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>
+          </div>
+          <p class="text-[11px] text-ink-400 mt-1.5 leading-relaxed">A <strong>date</strong> makes this a one-off deadline. A <strong>time</strong> alone is the daily cut-off for whichever day the checklist runs. Set both to pin it to an exact moment.</p>
         </div>
       </div>
       <!-- Locations -->
@@ -151,15 +180,11 @@ function _freqUI(freq){
   const sched=CLD?.schedule||'Every day';
 
   if(freq==='Daily'){
-    return`<div>
-      <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Schedule</div>
-      <div style="display:flex;gap:6px;margin-bottom:10px">
-        ${['Every day','Selected weekdays'].map(o=>`<button type="button" data-sched="${o}" onclick="App._dailySched('${o}',this)"
-          style="flex:1;padding:8px;border-radius:10px;border:1.5px solid;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;background:${sched===o?'#15171C':'#fff'};color:${sched===o?'#fff':'#6B7280'};border-color:${sched===o?'#15171C':'#ECEDF0'}">${o}</button>`).join('')}
-      </div>
-      <div id="cn-daysel" style="display:${sched==='Selected weekdays'?'flex':'none'};flex-wrap:wrap;gap:6px">
-        ${WKDAYS.map(d=>`<button type="button" onclick="App._togDay('${d}',this)" class="dchip ${sd.includes(d)?'on':''}">${d}</button>`).join('')}
-      </div>
+    /* Daily used to offer "Every day" or "Selected weekdays" — the second was the same thing as
+       Weekly, two ways to say one thing. Daily now simply means every day. */
+    return`<div style="display:flex;align-items:center;gap:9px">
+      <span style="width:30px;height:30px;border-radius:9px;background:#fff;border:1px solid #ECEDF0;display:grid;place-items:center;color:#6B7280;flex-shrink:0">${ic('clock','w-4 h-4')}</span>
+      <div style="font-size:12.5px;color:#6B7280;line-height:1.5">Runs <strong style="color:#15171C">every day</strong>. To run it on particular days only, choose <strong style="color:#15171C">Weekly</strong> above.</div>
     </div>`;
   }
 
@@ -223,19 +248,6 @@ App._freqChange=f=>{
   if(f==='Custom'&&!CLD._calYear){const n=new Date();CLD._calYear=n.getFullYear();CLD._calMonth=n.getMonth();}
   const sw=$('#cn-sched');if(sw)sw.innerHTML=_freqUI(f);
 };
-App._dailySched=(o,el)=>{
-  CLD.schedule=o;
-  // Update button styles
-  el.parentNode.querySelectorAll('button[data-sched]').forEach(b=>{
-    const active=b.dataset.sched===o;
-    b.style.background=active?'#15171C':'#fff';
-    b.style.color=active?'#fff':'#6B7280';
-    b.style.borderColor=active?'#15171C':'#ECEDF0';
-  });
-  // Show/hide weekday picker
-  const daysel=$('#cn-daysel');
-  if(daysel)daysel.style.display=o==='Selected weekdays'?'flex':'none';
-};
 App._togDay=(d,el)=>{const i=CLD.selectedDays.indexOf(d);if(i>-1)CLD.selectedDays.splice(i,1);else CLD.selectedDays.push(d);el.classList.toggle('on');};
 App._togDN=(n,el)=>{
   if(!CLD.selectedDates)CLD.selectedDates=[];
@@ -266,8 +278,10 @@ App._saveCl=(editing)=>{
   CLD.name=$('#cn-name')?.value.trim()||CLD.name;CLD.description=$('#cn-desc')?.value.trim()||'';
   CLD.status=$('#cn-status')?.value||'Active';
   CLD.department=$('#cn-dep')?.value||CLD.department;CLD.frequency=$('#cn-freq')?.value||CLD.frequency;
+  if(CLD.frequency==='Daily'){CLD.schedule='Every day';CLD.selectedDays=[];} // no half-state left behind
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   CLD.scheduleTime=$('#cn-time')?.value||null;
+  CLD._deadlineDate=$('#cn-ddate')?($('#cn-ddate').value||null):_clDeadlineDate(CLD.id);
   if($('#cn-anyone'))CLD.anyOne=$('#cn-anyone').classList.contains('on');
   if(!CLD.name){toast('Name required','err');
     const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
@@ -288,6 +302,10 @@ App._saveCl=(editing)=>{
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
   // ── Capture row before clearing CLD ──
   const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',any_one:CLD.anyOne||false,created_by:CLD.createdBy||null};
+  // The optional deadline DATE rides its own new table (tm_checklist_meta) so nothing on the
+  // existing checklists row changes shape; the deadline TIME stays on schedule_time, which
+  // already means exactly that.
+  const _ddate=CLD._deadlineDate||null;const _cid=CLD.id;
   const toastMsg=editing?'Saved':'Checklist created';
   // ── Clear CLD FIRST so render() never re-opens the modal ──
   CLD=null;
@@ -296,6 +314,7 @@ App._saveCl=(editing)=>{
   toast(toastMsg);
   saveDB();
   render();
+  _tmMetaSave(_cid,_ddate);
   // ── Sync to Supabase in background ──
   sb.from('checklists').upsert(clRow,{onConflict:'id'}).then(({error})=>{
     if(error){console.error('Checklist sync error:',error.message);toast('Not synced: '+error.message.slice(0,60),'warn');}

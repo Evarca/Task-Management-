@@ -46,6 +46,9 @@ function ticketsPage(){
   if(statusFilter)tickets=tickets.filter(t=>t.status===statusFilter);
   if(priorityFilter)tickets=tickets.filter(t=>t.priority===priorityFilter);
   if(f.tkAssignee)tickets=tickets.filter(t=>t.assignedTo===f.tkAssignee);
+  // A ticket's client comes from the checklist it was raised against; a manually raised ticket
+  // has no checklist, so it only shows when no client filter is applied.
+  if(f.tkClient)tickets=tickets.filter(t=>matchesClient(clientIdsOfTicket(t),f.tkClient));
   const _priRank={Critical:0,High:1,Medium:2,Low:3};
   const _tkTime=t=>t.createdAt||t.date||'';
   if(f.tkSort==='old')tickets.sort((a,b)=>String(_tkTime(a)).localeCompare(String(_tkTime(b))));
@@ -117,14 +120,15 @@ function ticketsPage(){
     (()=>{
       const _selSt='font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto';
       const _people=[...new Set(base.map(t=>t.assignedTo).filter(Boolean))].map(id=>uById(id)).filter(Boolean).sort((a,b)=>fullName(a).localeCompare(fullName(b)));
-      const _active=!!(f.tkQ||statusFilter||priorityFilter||f.tkAssignee||f.tkSort);
+      const _active=!!(f.tkQ||statusFilter||priorityFilter||f.tkAssignee||f.tkSort||f.tkClient);
       return '<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:10px">'+
         '<div style="position:relative;flex:1;min-width:170px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3)">'+ic('search','w-4 h-4')+'</span>'+
         `<input id="tk-q" value="${esc(f.tkQ||'')}" oninput="S.filters.tkQ=this.value;App._searchRR('tk-q')" placeholder="Search title, description, people…" class="ui-input" style="padding:6px 10px 6px 32px;min-height:34px;font-size:12.5px"/></div>`+
         `<select onchange="S.filters.tkAssignee=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">All assignees</option>${_people.map(p=>`<option value="${p.id}" ${f.tkAssignee===p.id?'selected':''}>${esc(fullName(p))}</option>`).join('')}</select>`+
+        clientFilter('tkClient',_selSt)+
         `<select onchange="App._tkFilter('priority',this.value)" class="ui-select" style="${_selSt}"><option value="">Any priority</option>${['Critical','High','Medium','Low'].map(p=>`<option ${priorityFilter===p?'selected':''}>${p}</option>`).join('')}</select>`+
         `<select onchange="S.filters.tkSort=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">Newest first</option><option value="old" ${f.tkSort==='old'?'selected':''}>Oldest first</option><option value="pri" ${f.tkSort==='pri'?'selected':''}>By priority</option></select>`+
-        (_active?`<button onclick="['tkQ','tkStatus','tkPriority','tkAssignee','tkSort'].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:'')+
+        (_active?`<button onclick="['tkQ','tkStatus','tkPriority','tkAssignee','tkSort','tkClient'].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:'')+
       '</div>'+
       '<div class="hscroll" style="gap:8px;margin-bottom:16px;align-items:center">'+
         ['','Open','In Progress','Resolved','Closed'].map(s=>{const on=statusFilter===s;return`<button type="button" class="ui-tab-pill${on?' on':''}" style="flex-shrink:0" onclick="App._tkFilter('status','${s}')">${s||'All'}</button>`;}).join('')+
@@ -230,9 +234,14 @@ App._ticketStatus=(id,status)=>{
   const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
   const _own=t.assignedTo===S.uid||t.createdBy===S.uid;
   if(!_own&&!can('tickets','changeStatus'))return toast('You need Tickets → Change status','err');
+  const was=t.status;
   t.status=status;
-  if(status==='Resolved'&&!t.resolvedAt)t.resolvedAt=new Date().toISOString(); // FINAL-FIX: resolution timestamp for analytics
+  if(status==='Resolved'&&!t.resolvedAt)t.resolvedAt=new Date().toISOString(); // resolution timestamp for analytics
   if(status==='Open')t.resolvedAt=null;
+  /* The raiser hears about the outcome from HERE too, not only from the resolve modal — a
+     status changed straight from the dropdown is the same news to them. */
+  if(was!==status&&(status==='Resolved'||status==='Closed'||(status==='Open'&&(was==='Resolved'||was==='Closed'))))
+    _tkNotifyOutcome(t,status==='Open'?'Reopened':status,t.resolveNote||'');
   saveDB();rr();
   sb.from('tickets').update({status,resolved_at:t.resolvedAt||null}).eq('id',id).then(()=>{}).catch(e=>console.warn('ticket status:',e.message));
 };
@@ -244,16 +253,33 @@ App._resolveTicket=(id)=>{
     footer:btnG('Cancel','App.closeModal()')+btn('Mark Resolved',`App._confirmResolve('${id}')`,{variant:'brand'})});
 };
 
+/* Whoever should hear about a ticket's outcome: the person who raised it and, for a ticket
+   opened automatically by a failing checklist answer, the person whose answer triggered it.
+   Deduped, and never the person doing the resolving. */
+function _tkAudience(t){
+  const out=new Set();
+  if(t.createdBy)out.add(t.createdBy);
+  if(t.submitterId)out.add(t.submitterId);
+  out.delete(S.uid);
+  return [...out].filter(id=>uById(id));
+}
+function _tkNotifyOutcome(t,status,note){
+  const who=_tkAudience(t);if(!who.length)return;
+  const title=String(t.title||'Ticket').slice(0,60);
+  const txt=(status==='Resolved')?'✅ Resolved: "'+title+'"'+(note?' — '+String(note).slice(0,60):'')
+    :(status==='Closed')?'📕 Closed: "'+title+'"'
+    :'🔄 Reopened: "'+title+'"';
+  who.forEach(id=>_hrmNotify(id,txt+' · by '+fullName(me()),'ticket','tickets'));
+  _invalidateNotifCache();
+}
+
 App._confirmResolve=(id)=>{
   const note=$('#tk-note')?.value?.trim()||'';
   const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
   if(!(t.assignedTo===S.uid||can('tickets','resolve')))return toast('You need Tickets → Resolve','err');
   t.status='Resolved';t.resolvedAt=new Date().toISOString();t.resolveNote=note;
-  // Notify the submitter
-  if(t.submitterId&&t.submitterId!==S.uid){
-    if(_inappOn('ticket'))DB.notifications.unshift({id:uid('n'),userId:t.submitterId,text:'✅ Ticket resolved: "'+t.title+'"'+(note?' — '+note.slice(0,60):''),time:new Date().toISOString(),read:false,kind:'ticket'});
-    _invalidateNotifCache();
-  }
+  _tkNotifyOutcome(t,'Resolved',note);
+  log(fullName(me()),'Resolved ticket',t.title||'');
   closeModal();saveDB();rr();
   sb.from('tickets').update({status:'Resolved',resolved_at:t.resolvedAt,resolve_note:note}).eq('id',id).then(({error})=>{if(error)_syncErr('ticket resolution')(error);}).catch(_syncErr('ticket resolution'));
 };

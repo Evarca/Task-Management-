@@ -87,7 +87,7 @@ App._orgProfile=(id)=>{
       ${row('Department',u.department?esc(u.department):'')}
       ${row('Reports to',mgr?esc(fullName(mgr)):'—')}
       ${row('Direct reports',reports.length?esc(reports.slice(0,6).map(r=>fullName(r)).join(', '))+(reports.length>6?' +'+(reports.length-6)+' more':''):'')}
-      ${row('Office',loc?esc(loc.name):'—')}
+      
       ${row('Joined',h.joiningDate?fmtD(h.joiningDate)+(tenure?' · '+tenure:''):'')}
       ${row('Birthday',h.dob?fmtD(h.dob):'')}
       ${row('Work week',h.schedule?esc((h.schedule.workWeek||5)+'-day · '+(h.schedule.in||'09:00')+'–'+(h.schedule.out||'18:00')):'')}

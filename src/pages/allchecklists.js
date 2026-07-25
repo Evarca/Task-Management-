@@ -185,7 +185,7 @@ function allClsPage(){
         ${DB.departments.map(x=>`<option value="${esc(x.name)}" ${dep===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}
       </select>
       <select onchange="S.filters.aclLoc=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" class="ui-select" style="width:auto;font-weight:600">
-        <option value="">All locations</option>
+        <option value="">All clients</option>
         ${DB.locations.map(x=>`<option value="${x.id}" ${loc===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}
       </select>
     </div>

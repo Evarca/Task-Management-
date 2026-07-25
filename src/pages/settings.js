@@ -244,7 +244,7 @@ App._nsSaveEmail=async()=>{
   if(!_ns)_ns=_nsDefault();
   const name=($('#ns-from-name')?.value||'').trim();
   const addr=($('#ns-from-addr')?.value||'').trim();
-  const mins=parseInt($('#ns-reminder-mins')?.value||'15',10)||15;
+  const mins=parseInt($('#ns-reminder-mins')?.value||String(_ns.email_reminder_minutes||15),10)||15;
   if(!addr){toast('Enter a from email address','err');return;}
   if(!addr.includes('@')){toast('Enter a valid email address','err');return;}
   _ns.email_from_name=name||'Evarca';_ns.email_from_address=addr;
@@ -281,127 +281,128 @@ App._testEmail=async()=>{
 function settingsPage(){
   // Workflow tab removed — its 4 toggles were never read by any code. Approval/edit behavior is
   // governed per-checklist and by Access Control. Stale stab==='workflow' falls back to 'inapp'.
-  const stab=(S.filters.stab&&S.filters.stab!=='workflow')?S.filters.stab:'inapp';
+  // Old sub-tab names ('inapp', 'email', 'hrmemail', 'workflow') all resolve to the one
+  // Notifications tab that replaced them, so a stale link or bookmark still lands somewhere real.
+  const _validTabs=['notif','templates','data'];
+  const stab=_validTabs.includes(S.filters.stab)?S.filters.stab:'notif';
   if(!_ns){_loadNS().then(()=>rr());return`<div class="fade">${hdr('Settings','')}${loadingState('Loading settings…')}</div>`;}
   const ns=_ns;
-  const TABS=[['inapp','In-App'],['email','Email']];
-  if(can('settings','edit'))TABS.push(['notif','Feature switches']);
-  TABS.push(['templates','Templates']);
+  const TABS=[['notif','Notifications'],['templates','Templates'],['data','Data']];
   const tabBar=`<div class="ui-tabs" style="margin-bottom:20px">${TABS.map(([k,ll])=>`<button class="ui-tab${stab===k?' on':''}" onclick="App._setSTab('${k}')">${ll}</button>`).join('')}</div>`;
 
-  // One complete in-app surface: checklist events, approvals/feedback and announcements.
-  // The announcement row rides DB.hrmNotifPrefs via _hnpRow2; the rest ride the synced _ns settings.
-  const _hnpRow2=(key,label,desc)=>{const on=_hnp(key);return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F5F4F0"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#15171C">${label}</div>${desc?`<div style="font-size:11px;color:#B8B5AC;margin-top:1px">${desc}</div>`:''}</div><button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="App._hnpTog(this,'${key}')"><span></span></button></div>`;};
-  const inappTab=`<div class="space-y-4">
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
-      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
-        <div style="font-size:14px;font-weight:700">In-app notifications — every event</div>
-        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Bell icon — shown only to the relevant user. Per-feature master switches (Checklists, Tickets, Questions…) live in the <strong>Feature switches</strong> tab.</div>
-      </div>
-      <div style="padding:4px 20px 12px">
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
-        ${_nsTogRow('inapp_checklist_assigned','Checklist assigned','Sent to the user the checklist is assigned to')}
-        ${_nsTogRow('inapp_submission_submitted','Submission submitted','Sent to the manager when their team submits')}
-        ${_nsTogRow('inapp_submission_late','Submission late','Sent to the manager when a submission is overdue')}
-        ${_nsTogRow('inapp_submission_approved','Submission approved','Sent to the user whose submission was approved')}
-        ${_nsTogRow('inapp_submission_rejected','Submission rejected','Sent to the user whose submission was rejected')}
-        ${_nsTogRow('inapp_deadline_reminder','Deadline reminder','Sent to the user before their task cutoff')}
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
-        ${_nsTogRow('inapp_approval_requested','Approval requested','Sent to admin when an approval is pending')}
-        ${_nsTogRow('inapp_approval_decided','Approval decided','Sent to the user when their approval is approved/rejected')}
-        ${_nsTogRow('inapp_feedback_received','Feedback received','Sent to the user when their manager sends feedback')}
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Announcements</div>
-        ${_hnpRow2('inapp_announcement','Announcements','Targeted users notified of new announcements')}
-      </div>
-    </div>
-  </div>`;
+  /* ── NOTIFICATIONS ──
+     There used to be three tabs here — one listing every event for in-app, one listing the SAME
+     events again for email, and a third listing per-feature switches for both channels. Every
+     switch appeared twice under a different heading. It is one table now: a row per event, a
+     column per channel, so where a setting lives is obvious and nothing is duplicated.
 
+     Two stores sit behind it and that is invisible on purpose: most events ride the synced
+     workspace notification settings (_ns), while the announcement row rides DB.hrmNotifPrefs
+     — a shared row this build must not reshape. The matrix reads and writes whichever one
+     owns the key. */
+  const EVENTS=[
+    {group:'Checklists',rows:[
+      ['checklist_assigned','Checklist assigned','The person it was assigned to'],
+      ['submission_submitted','Checklist submitted','Their manager',{email:false}],
+      ['submission_late','Submitted late','Their manager'],
+      ['deadline_reminder','Deadline approaching','The person who owes it'],
+    ]},
+    {group:'Approvals',rows:[
+      ['approval_requested','Approval needed','Whoever can decide it'],
+      ['approval_decided','Approval decided','The person who asked'],
+      ['submission_approved','Submission approved','The person who submitted'],
+      ['submission_rejected','Submission rejected','The person who submitted'],
+    ]},
+    {group:'Everything else',rows:[
+      ['feedback_received','Feedback received','The person it is about'],
+      ['escalation','Escalation raised','Whoever it escalates to',{inapp:false}],
+      ['announcement','Announcement posted','Everyone it targets',{store:'hnp'}],
+    ]},
+  ];
+  const _evOn=(key,ch)=>{
+    const st=(EVENTS.flatMap(g=>g.rows).find(r=>r[0]===key)||[])[3]||{};
+    if(st.store==='hnp')return ch==='inapp'?_hnp('inapp_announcement'):_hnp('email_announcement');
+    return ns[ch+'_'+key]!==false;
+  };
+  const _evCell=(key,ch,avail)=>{
+    if(avail===false)return '<span style="display:inline-block;width:34px;text-align:center;color:var(--c-text-3);font-size:12px" title="This event has no '+ch+' delivery">—</span>';
+    const st=(EVENTS.flatMap(g=>g.rows).find(r=>r[0]===key)||[])[3]||{};
+    const on=_evOn(key,ch);
+    const call=st.store==='hnp'
+      ? `App._hnpTog(this,'${ch==='inapp'?'inapp_announcement':'email_announcement'}')`
+      : `App._nsTog(this,'${ch}_${key}')`;
+    return `<button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(key)} ${ch}" class="tog ${on?'on':'off'}" onclick="${call}"><span></span></button>`;
+  };
   const emailOn=ns.email_enabled!==false;
-  const emailTab=`<div class="space-y-4">
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
-      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9;display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:14px;font-weight:700">Email notifications</div>
-          <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Sends to the email address set on each user's account</div>
-        </div>
-        <button role="switch" aria-checked="${emailOn?'true':'false'}" aria-label="Email notifications" class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
-      </div>
-      <div style="padding:16px 20px;border-bottom:1px solid #F0EEE9">
-        <div style="font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Sender identity</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <div>
-            <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
-            <input id="ns-from-name" value="${esc(ns.email_from_name||'Evarca')}" placeholder="Evarca"
-              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
-          </div>
-          <div>
-            <label for="ns-from-addr" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From address</label>
-            <input id="ns-from-addr" type="email" value="${esc(ns.email_from_address||'')}" placeholder="you@company.com"
-              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
-          </div>
-        </div>
-        <div style="margin-bottom:12px">
-          <label for="ns-reminder-mins" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Reminder lead time (minutes before deadline)</label>
-          <input id="ns-reminder-mins" type="number" min="5" max="120" value="${ns.email_reminder_minutes||15}"
-            style="width:120px;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
-        </div>
-        <div style="display:flex;gap:8px">
-          ${btn('Save settings','App._nsSaveEmail()',{variant:'primary',attrs:'style="flex:1"'})}
-          ${btn('Send test email','App._testEmail()',{variant:'ghost',attrs:'id="ns-test-btn"'})}
-        </div>
-      </div>
-      <div style="padding:4px 20px 12px">
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
-        ${_nsTogRow('email_checklist_assigned','Checklist assigned','Email sent to the assigned user')}
-        ${_nsTogRow('email_submission_late','Submission late','Email sent to the manager')}
-        ${_nsTogRow('email_submission_approved','Submission approved','Email sent to the user')}
-        ${_nsTogRow('email_submission_rejected','Submission rejected','Email sent to the user')}
-        ${_nsTogRow('email_deadline_reminder','Deadline reminder','Email sent to the user before cutoff')}
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
-        ${_nsTogRow('email_approval_requested','Approval requested','Email sent to admin')}
-        ${_nsTogRow('email_approval_decided','Approval decided','Email sent to the user')}
-        ${_nsTogRow('email_feedback_received','Feedback received','Email sent to the user')}
-        ${_nsTogRow('email_escalation','Escalation raised','Email sent to the person it escalates to')}
-      </div>
-    </div>
-  </div>`;
-
-  // ── FEATURE SWITCHES TAB ──
-  // Per-feature master switches for in-app rows and queued email, stored on the shared
-  // hrm_config row. A feature switched off here silences that kind everywhere, whatever the
-  // per-event toggles above say. The email master switch gates the announcement mailer.
-  const _hnpRow=(key,label,desc)=>{const on=_hnp(key);return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F5F4F0"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#15171C">${label}</div>${desc?`<div style="font-size:11px;color:#B8B5AC;margin-top:1px">${desc}</div>`:''}</div><button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="App._hnpTog(this,'${key}')"><span></span></button></div>`;};
-  const _kindRow=(kind,label,which)=>{
-    const store=which==='inapp'?'inappKinds':'emailKinds';
-    const on=((DB.hrmConfig&&DB.hrmConfig[store])||{})[kind]!==false;
-    return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F5F4F0"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#15171C">${esc(label)}</div></div><button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)} ${which}" class="tog ${on?'on':'off'}" onclick="App._kindTog(this,'${store}','${kind}')"><span></span></button></div>`;
+  const _feat=(kind,label)=>{
+    const inOn=((DB.hrmConfig&&DB.hrmConfig.inappKinds)||{})[kind]!==false;
+    const emOn=((DB.hrmConfig&&DB.hrmConfig.emailKinds)||{})[kind]!==false;
+    return `<tr style="border-top:1px solid #F5F4F0">
+      <td style="padding:10px 20px"><div style="font-size:13px;font-weight:600;color:#15171C">${esc(label)}</div></td>
+      <td style="padding:10px 8px;text-align:center"><button role="switch" aria-checked="${inOn?'true':'false'}" aria-label="${esc(label)} in-app" class="tog ${inOn?'on':'off'}" onclick="App._kindTog(this,'inappKinds','${kind}')"><span></span></button></td>
+      <td style="padding:10px 20px 10px 8px;text-align:center"><button role="switch" aria-checked="${emOn?'true':'false'}" aria-label="${esc(label)} email" class="tog ${emOn?'on':'off'}" onclick="App._kindTog(this,'emailKinds','${kind}')"><span></span></button></td>
+    </tr>`;
   };
   const notifTab=`<div class="space-y-4">
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
-      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
-        <div style="font-size:14px;font-weight:700">Feature switches</div>
-        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">One master switch per feature. Turning a feature off here silences it everywhere, whatever the per-event toggles say.</div>
-      </div>
-      <div class="grid md:grid-cols-2" style="gap:0">
-        <div style="padding:4px 20px 12px">
-          <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">In-app</div>
-          ${NOTIF_KINDS.map(([k,l])=>_kindRow(k,l,'inapp')).join('')}
+      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:14px;font-weight:700">What gets sent, and how</div>
+          <div style="font-size:12px;color:#9CA3AF;margin-top:2px">One row per event. <strong>In-app</strong> is the bell; <strong>Email</strong> goes to the address on the person's account.</div>
         </div>
-        <div style="padding:4px 20px 12px;border-left:1px solid #F0EEE9">
-          <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Email</div>
-          ${NOTIF_KINDS.map(([k,l])=>_kindRow(k,l,'email')).join('')}
-        </div>
+        <label style="display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#374151">Email delivery
+          <button role="switch" aria-checked="${emailOn?'true':'false'}" aria-label="Email delivery master switch" class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
+        </label>
       </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#FCFCFB">
+          <th style="text-align:left;padding:8px 20px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Event</th>
+          <th style="width:90px;padding:8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">In-app</th>
+          <th style="width:90px;padding:8px 20px 8px 8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Email</th>
+        </tr></thead>
+        <tbody>
+        ${EVENTS.map(g=>`
+          <tr><td colspan="3" style="padding:11px 20px 4px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em;background:#FCFCFB">${esc(g.group)}</td></tr>
+          ${g.rows.map(([key,label,who,st])=>`<tr style="border-top:1px solid #F5F4F0">
+            <td style="padding:10px 20px"><div style="font-size:13px;font-weight:600;color:#15171C">${esc(label)}</div><div style="font-size:11px;color:#B8B5AC;margin-top:1px">Goes to: ${esc(who)}</div></td>
+            <td style="padding:10px 8px;text-align:center">${_evCell(key,'inapp',!(st&&st.inapp===false))}</td>
+            <td style="padding:10px 20px 10px 8px;text-align:center">${_evCell(key,'email',!(st&&st.email===false))}</td>
+          </tr>`).join('')}
+        `).join('')}
+        </tbody>
+      </table>
+      ${!emailOn?`<div style="padding:11px 20px;background:#FFFBEB;border-top:1px solid #FDE68A;font-size:12px;color:#92400E">Email delivery is off, so the Email column is ignored until you switch it back on.</div>`:''}
     </div>
+
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
       <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
-        <div style="font-size:14px;font-weight:700">Announcement email</div>
-        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Announcements can also go out by email. The master switch gates the announcement mailer.</div>
+        <div style="font-size:14px;font-weight:700">Mute a whole feature</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">A shortcut, not a duplicate: turning a feature off here silences everything it sends, whatever the rows above say.</div>
       </div>
-      <div style="padding:4px 20px 12px">
-        ${_hnpRow('hrm_email_enabled','Send announcement emails','Master switch — off means announcements are in-app only')}
-        ${_hnpRow('email_announcement','Announcements','Email targeted users when a new announcement is posted')}
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#FCFCFB">
+          <th style="text-align:left;padding:8px 20px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Feature</th>
+          <th style="width:90px;padding:8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">In-app</th>
+          <th style="width:90px;padding:8px 20px 8px 8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Email</th>
+        </tr></thead>
+        <tbody>${NOTIF_KINDS.map(([k,l])=>_feat(k,l)).join('')}</tbody>
+      </table>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <div style="font-size:14px;font-weight:700;margin-bottom:3px">Sender identity</div>
+      <div style="font-size:12px;color:#9CA3AF;margin-bottom:12px">The name and address outgoing email is sent from.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
+          <input id="ns-from-name" value="${esc(ns.email_from_name||'Evarca')}" placeholder="Evarca" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+        </div>
+        <div>
+          <label for="ns-from-addr" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From address</label>
+          <input id="ns-from-addr" value="${esc(ns.email_from_address||'')}" placeholder="no-reply@yourcompany.com" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+        </div>
       </div>
+      <div style="margin-top:12px">${btn('Save sender','App._nsSaveEmail()',{variant:'primary',size:'sm'})}</div>
     </div>
   </div>`;
 
@@ -481,11 +482,11 @@ function settingsPage(){
     </div>
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
       <h3 class="fd font-semibold text-sm mb-3">Workspace stats</h3>
-      <div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div>
+      <div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Clients',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div>
     </div>
   </div>`;
 
-  const content=stab==='inapp'?inappTab:stab==='email'?emailTab:stab==='notif'?notifTab:stab==='templates'?templatesTab:dataTab;
+  const content=stab==='templates'?templatesTab:stab==='data'?dataTab:notifTab;
   return`<div class="fade">${hdr('Settings','')}${tabBar}${content}</div>`;
 }
 

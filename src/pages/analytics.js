@@ -105,7 +105,7 @@ App._aStatDrill=(type)=>{
     body:'<div style="margin:-20px">'+(rows||'<div style="padding:32px;text-align:center;color:var(--c-text-3);font-size:13px">'+emptyMsg+'</div>')+'</div>'});
 };
 
-window._AData=null;window._HData=null;window._AFiltered=null;window._aCharts=[];
+window._AData=null;window._AFiltered=null;window._aCharts=[];
 // Who the dashboard analytics can see — the SAME reports-permission scope HRM Analytics uses, so the
 // two pages always show the same set of people (instead of a hard-coded reporting subtree).
 function _reportScopeIds(){const s=new Set(scopedUsers('reports').map(u=>u.id));s.add(S.uid);return s;}
@@ -168,7 +168,6 @@ function analyticsPage(){
     });
   });
 
-  const topU=relevantUsers.map(u=>({u,n:subs.filter(s=>s.userId===u.id).length,tk:aTickets.filter(t=>t.assignedTo===u.id||t.submitterId===u.id).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
   const recent=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,50);
   const activeCount=fArr('users').length+fArr('deps').length+fArr('locs').length+fArr('stats').length+(f.dr1?1:0)+(f.dr2?1:0);
 
@@ -195,32 +194,20 @@ function analyticsPage(){
   }
   
 
-  // ── Pending approvals (scoped) + per-user performance + chart datasets for the live visuals ──
+  // ── Pending approvals (scoped) + the chart datasets behind the live visuals ──
   const _pendA=(DB.approvals||[]).filter(a=>a.status==='Pending'&&(isAdmin()||relevantUsers.some(u=>u.id===a.requesterId))).length;
-  const _perfRows=relevantUsers.filter(u=>u.status==='Active').map(u=>{
-    const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;
-    const ss=subs.filter(s=>s.userId===u.id);
-    const ot=ss.filter(s=>s.status==='On Time').length;
-    return{u,asgn,total:ss.length,late:ss.filter(s=>s.status==='Late').length,pend:ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length,tk:aTickets.filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length,pct:ss.length?Math.round(ot/ss.length*100):0};
-  }).filter(r=>r.total||r.asgn).sort((a,b)=>fullName(a.u).localeCompare(fullName(b.u)));
   const _trendLabels=dateRange.map(d=>d.slice(5));
   const _dateMap={};dateRange.forEach(d=>{_dateMap[d.slice(5)]=d;});
   const _depMap={};subs.forEach(s=>{const c=clById(s.checklistId);if(!c)return;const dn=c.department||'—';(_depMap[dn]=_depMap[dn]||{t:0,ot:0});_depMap[dn].t++;if(s.status==='On Time')_depMap[dn].ot++;});
   const _depArr=Object.keys(_depMap).map(k=>({name:k,t:_depMap[k].t,ot:_depMap[k].ot})).sort((a,b)=>b.t-a.t).slice(0,8);
   // compliant / non-compliant submission LISTS (for click-to-drill)
   const _comp=[],_noncomp=[];subs.forEach(s=>{const c=clById(s.checklistId);if(!c||!(c.questionIds||[]).length)return;(_subEscalationCount(c,s)>0?_noncomp:_comp).push(s);});
-  // per-employee dataset — respects the employee filter (else top 15 by activity)
-  let _empUsers=relevantUsers.filter(u=>u.status==='Active');
-  if(fArr('users').length)_empUsers=_empUsers.filter(u=>fArr('users').includes(u.id));
-  const _empRows=_empUsers.map(u=>{const ss=subs.filter(s=>s.userId===u.id);return{id:u.id,name:fullName(u),ot:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length,pend:ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length,total:ss.length};}).filter(r=>r.total).sort((a,b)=>b.total-a.total).slice(0,15);
   _AData={
     status:{labels:['On Time','Late','Pending Approval','Rejected','Missed'],data:[byS['On Time']||0,byS['Late']||0,byS['Pending Approval']||0,byS['Rejected']||0,totalMissed],colors:['#10B981','#EF4444','#F97316','#9F1239','#F59E0B']},
     trend:{labels:_trendLabels,sub:dateRange.map(dt=>subs.filter(s=>s.date===dt).length),ontime:dateRange.map(dt=>subs.filter(s=>s.date===dt&&s.status==='On Time').length),late:dateRange.map(dt=>subs.filter(s=>s.date===dt&&s.status==='Late').length)},
     dept:{labels:_depArr.map(d=>d.name),total:_depArr.map(d=>d.t),onTime:_depArr.map(d=>d.ot)},
     tickets:{labels:['Open','In Progress','Resolved'],data:[aTickets.filter(t=>t.status==='Open').length,aTickets.filter(t=>t.status==='In Progress').length,aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed').length],colors:['#F59E0B','#0EA5E9','#0E9F6E']},
     compliance:{labels:['Compliant','Non-compliant'],data:[compliantN,nonCompliantN],colors:['#0E9F6E','#BE123C']},
-    emp:{ids:_empRows.map(r=>r.id),labels:_empRows.map(r=>r.name),onTime:_empRows.map(r=>r.ot),late:_empRows.map(r=>r.late),pend:_empRows.map(r=>r.pend)},
-    top:{labels:topU.slice(0,8).map(x=>fullName(x.u)),data:topU.slice(0,8).map(x=>x.n)},
     // PRO-VIZ: submission volume by weekday (vertical gradient bars).
     weekday:(()=>{const names=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];const n=[0,0,0,0,0,0,0];subs.forEach(s=>{if(!s.date)return;const d=new Date(s.date+'T00:00:00').getDay();n[(d+6)%7]++;});return{labels:names,data:n};})()
   };
@@ -253,14 +240,14 @@ function analyticsPage(){
   return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
   ${hdr('Company',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${typeof _pulseStrip==='function'?_pulseStrip():''}
-  ${typeof _todayLoadWidget==='function'?_todayLoadWidget():''}
+  ${typeof _clOverviewWidget==='function'?_clOverviewWidget(today):''}
   <!-- Filter bar -->
   <div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:14px 16px;margin-bottom:14px;position:sticky;top:0;z-index:20">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       ${msDropdown('Status','stats',['On Time','Late','Pending Approval','Rejected'],s=>s,s=>s)}
       ${msDropdown('Department','deps',DB.departments,d=>d.name,d=>d.name)}
       ${msDropdown('Team member','users',relevantUsers,u=>u.id,u=>fullName(u))}
-      ${DB.locations.length?msDropdown('Location','locs',DB.locations,l=>l.id,l=>l.name):''}
+      ${DB.locations.length?msDropdown('Client','locs',DB.locations,l=>l.id,l=>l.name):''}
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px">
@@ -305,26 +292,14 @@ function analyticsPage(){
     <div style="${_cc}"><div class="fd" style="${_ct}">Department performance</div><div style="position:relative;height:230px"><canvas id="aChartDept" data-chart="department"></canvas></div></div>
     <div style="${_cc}"><div class="fd" style="${_ct}">Tickets</div><div style="position:relative;height:230px"><canvas id="aChartTickets" data-chart="tickets"></canvas></div></div>
   </div>
-  <div style="${_cc};margin-bottom:14px"><div class="fd" style="${_ct};display:flex;align-items:center;justify-content:space-between">By employee${fArr('users').length?'<span style="font-size:11px;font-weight:600;color:var(--c-brand-ink);background:var(--c-brand-soft);padding:2px 9px;border-radius:99px">filtered</span>':'<span style="font-size:11px;font-weight:500;color:var(--c-text-3)">top 15 · click a bar for detail</span>'}</div><div style="position:relative;height:${Math.max(220,(_AData.emp.ids.length||1)*34+60)}px"><canvas id="aChartEmp" data-chart="by-employee"></canvas></div></div>
   <div class="achart-grid" style="margin-bottom:14px">
     <div style="${_cc}"><div class="fd" style="${_ct}">Compliance</div><div style="position:relative;height:210px"><canvas id="aChartCompliance" data-chart="compliance"></canvas></div></div>
     <div style="${_cc}"><div class="fd" style="${_ct}">Submissions by weekday</div><div style="position:relative;height:210px"><canvas id="aChartWeekday" data-chart="weekday"></canvas></div></div>
   </div>
-  <div class="achart-grid" style="margin-bottom:14px">
-    <div style="${_cc}"><div class="fd" style="${_ct}">Top contributors</div>
-      ${topU.slice(0,7).map(({u,n})=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;cursor:pointer" onclick="App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<div style="flex:1;font-size:13px;font-weight:500;color:var(--c-text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(fullName(u))}</div><span class="fd" style="font-size:15px;font-weight:800;color:var(--c-text)">${n}</span><span style="font-size:11px;color:var(--c-text-3)">&rsaquo;</span></div>`).join('')||'<p style="font-size:13px;color:var(--c-text-3)">No data yet</p>'}
-    </div>
-  </div>
+  ${typeof _clOverviewTable==='function'?_clOverviewTable(today,{title:"Today's checklists"}):''}
   `:''}
   ${_view==='details'?`
-  <!-- Folded from the old admin/manager dashboard: per-user performance (respects the same scope + filters) -->
-  <div style="${_cc};padding:0;overflow:hidden;margin-bottom:14px">
-    <div style="padding:14px 18px;border-bottom:1px solid var(--c-border)"><span class="fd" style="font-size:14px;font-weight:700;color:var(--c-text)">${isAdmin()?'All users performance':'Team performance'} (${_perfRows.length})</span></div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="border-bottom:1px solid var(--c-border)">${['Member','Assigned','Submitted','Late','Pending','Tickets','On-time %'].map(h=>`<th style="padding:9px 16px;font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap">${h}</th>`).join('')}</tr></thead>
-      <tbody>${_perfRows.map(({u,asgn,total,late:lt,pend,tk,pct})=>`<tr style="border-bottom:1px solid var(--c-border);cursor:pointer" onclick="App._userDrill('${u.id}')" onmouseover="this.style.background='var(--c-surface-2)'" onmouseout="this.style.background=''"><td style="padding:9px 16px"><div style="display:flex;align-items:center;gap:7px">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-weight:500;color:var(--c-text)">${esc(fullName(u))}</span></div></td><td style="padding:9px 16px">${asgn}</td><td style="padding:9px 16px;color:var(--c-success-ink);font-weight:600">${total}</td><td style="padding:9px 16px;${lt?'color:var(--c-danger-ink);font-weight:700':''}">${lt}</td><td style="padding:9px 16px;color:var(--c-warn-ink)">${pend}</td><td style="padding:9px 16px">${tk||'<span style="color:var(--c-text-3)">0</span>'}</td><td style="padding:9px 16px"><div style="display:flex;align-items:center;gap:8px"><div style="width:60px;height:6px;border-radius:3px;background:var(--c-surface-2);overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span style="font-size:12px;font-weight:600;color:var(--c-text)">${pct}%</span></div></td></tr>`).join('')||`<tr><td colspan="7" style="padding:18px;text-align:center;color:var(--c-text-3);font-size:13px">No people match the current filters</td></tr>`}</tbody>
-    </table></div>
-  </div>
+  ${typeof _clOverviewTable==='function'?_clOverviewTable(today,{title:"Today's checklists"}):''}
 
   <!-- Table -->
   <div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);overflow:hidden">

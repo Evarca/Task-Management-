@@ -89,56 +89,26 @@ function homeDash(){
     ${qa('My profile',"App.go('profile')",'user')}
   </div>`;
 
-  // ── MY WORK: how my own submissions have gone over a pickable range (defaults to this month) ──
-  const _mwF=S.filters.myWorkFrom||(today.slice(0,8)+'01');
-  const _mwT=(S.filters.myWorkTo&&S.filters.myWorkTo>=_mwF)?S.filters.myWorkTo:today;
-  const MW=(()=>{
-    const out={assigned:0,onTime:0,late:0,pendingApproval:0,rejected:0,missed:0,days:0};
-    let d=_mwF,g=0;
-    while(d<=_mwT&&g++<400){
-      const cls=myCls(S.uid,d);
-      if(cls.length)out.days++;
-      cls.forEach(c=>{
-        out.assigned++;
-        const sub=subForCl(c,S.uid,d);
-        if(!sub){if(d<today)out.missed++;return;}
-        if(sub.status==='Late')out.late++;
-        else if(sub.status==='Rejected')out.rejected++;
-        else if(String(sub.status||'').startsWith('Pending'))out.pendingApproval++;
-        else out.onTime++;
-      });
-      d=_isoAdd(d,1);
-    }
-    return out;
-  })();
-  const _mwDone=MW.onTime+MW.late+MW.pendingApproval+MW.rejected;
-  _HData={myWork:{labels:['On time','Late','Awaiting approval','Rejected','Missed'],
-    data:[MW.onTime,MW.late,MW.pendingApproval,MW.rejected,MW.missed],
-    done:_mwDone,assigned:MW.assigned}};
-  const _mwChip=(n,label,fg,bg)=>`<div style="background:${bg||'var(--c-surface-2)'};border:1px solid var(--c-border);border-radius:11px;padding:9px 11px"><span class="fd" style="display:block;font-size:18px;font-weight:800;line-height:1;color:${fg||'var(--c-text)'}">${n}</span><span style="display:block;font-size:10.5px;font-weight:700;color:var(--c-text-2);margin-top:3px;white-space:nowrap">${label}</span></div>`;
-  const myWorkCard=`<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">My record</div>
-  <div class="ui-card" style="padding:16px;margin-bottom:16px">
-    <div class="hscroll" style="gap:8px;align-items:center;margin-bottom:14px">
-      <span style="font-size:10.5px;font-weight:800;color:var(--c-text-3);flex-shrink:0">FROM</span>
-      <input type="date" value="${_mwF}" onchange="S.filters.myWorkFrom=this.value;rr()" class="ui-input" style="width:auto;min-height:36px;padding:5px 10px;font-size:13px"/>
-      <span style="font-size:10.5px;font-weight:800;color:var(--c-text-3);flex-shrink:0">TO</span>
-      <input type="date" value="${_mwT}" onchange="S.filters.myWorkTo=this.value;rr()" class="ui-input" style="width:auto;min-height:36px;padding:5px 10px;font-size:13px"/>
-      ${(S.filters.myWorkFrom||S.filters.myWorkTo)?`<button onclick="delete S.filters.myWorkFrom;delete S.filters.myWorkTo;rr()" class="ui-btn ui-btn-ghost ui-btn-sm" style="flex-shrink:0">This month</button>`:`<span style="font-size:11px;font-weight:700;color:var(--c-text-3);flex-shrink:0">Current month</span>`}
-    </div>
-    <div class="grid md:grid-cols-2 gap-4 items-center">
-      <div style="position:relative;height:215px"><canvas id="hChartMyWork" data-chart="my-work"></canvas></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px">
-        ${_mwChip(MW.assigned,'Assigned')}
-        ${_mwChip(MW.onTime,'On time','var(--c-success-ink)','var(--c-success-soft)')}
-        ${_mwChip(MW.late,'Late',MW.late?'#B45309':undefined,MW.late?'#FFFBEB':undefined)}
-        ${_mwChip(MW.pendingApproval,'Awaiting approval','#5B2DBE','#F1ECFE')}
-        ${_mwChip(MW.rejected,'Rejected',MW.rejected?'var(--c-danger-ink)':undefined,MW.rejected?'var(--c-danger-soft)':undefined)}
-        ${_mwChip(MW.missed,'Missed',MW.missed?'var(--c-danger-ink)':undefined,MW.missed?'var(--c-danger-soft)':undefined)}
-        ${_mwChip(MW.assigned?Math.round(_mwDone/MW.assigned*100)+'%':'—','Completion','var(--c-brand-ink)','var(--c-brand-soft)')}
-        ${_mwChip(MW.days,'Active days')}
-      </div>
-    </div>
-  </div>`;
+  // ── TODAY'S CHECKLISTS: where each one actually stands, question by question ──
+  const myToday=dayCls.map(c=>{
+    const prog=_ansProgress(c,today);
+    const s2=runSub(c.id,today);
+    const submitted=!!s2&&s2.status!=='Editing';
+    return{c,prog,submitted,overdue:!submitted&&_clOverdue(c,today),pct:prog.total?Math.round(prog.done/prog.total*100):(submitted?100:0)};
+  });
+  const myWorkCard=dayCls.length?`<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Where each one stands</div>
+  <div class="ui-card" style="padding:6px 0;margin-bottom:16px">
+    ${myToday.map(r=>{
+      const tone=r.submitted?['#F0FDF4','#15803D','Submitted']:r.overdue?['#FEF2F2','#DC2626','Overdue']:r.prog.done?['#EFF6FF','#1D4ED8','In progress']:['#F9FAFB','#6B7280','Not started'];
+      return `<button onclick="App.go('mychecklists')" style="width:100%;display:flex;align-items:center;gap:12px;padding:11px 16px;background:transparent;border:none;border-bottom:1px solid var(--c-border);cursor:pointer;text-align:left">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13.5px;font-weight:700;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.c.name)}</div>
+          <div style="font-size:11.5px;color:var(--c-text-3);margin-top:2px">${r.prog.done}/${r.prog.total} answers in${_clDeadlineLabel(r.c)?' · due '+esc(_clDeadlineLabel(r.c)):''}</div>
+        </div>
+        <div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${r.pct}%;background:${r.pct>=100?'#0E9F6E':r.pct>0?'#0EA5E9':'#E5E7EB'}"></div></div>
+        <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${tone[0]};color:${tone[1]};flex-shrink:0">${tone[2]}</span>
+      </button>`;}).join('')}
+  </div>`:'';
 
   return `<div class="fade">
     <div style="position:relative;overflow:hidden;border-radius:20px;border:1px solid var(--c-border);background:linear-gradient(118deg,#F0FAF5 0%,var(--c-surface) 58%);box-shadow:var(--sh-sm);padding:22px 24px;margin-bottom:16px">
@@ -151,7 +121,7 @@ function homeDash(){
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button onclick="App._howModal()" title="How this tab works" aria-label="How this tab works" class="help-q" style="width:30px;height:30px;border-radius:50%;border:1.5px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:13px;font-weight:800;cursor:pointer">?</button></div>
       </div>
     </div>
-    ${(isMgr()||can('teamview','view'))?_todayLoadWidget():''}
+    ${(isMgr()||can('teamview','view'))?_clOverviewWidget(today):''}
     ${tiles?`<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Needs you</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${tiles}</div>`:''}
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Today</div>
     <div class="grid md:grid-cols-2 gap-4 items-start" style="margin-bottom:16px">${clCard}${tkCard}</div>
@@ -232,36 +202,31 @@ function myClsPage(){
 }
 
 
-function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
+function _clFooter(c,date,sub,isPast,isFuture,u){
   const cid=c.id;
-  // "Any one can complete" mode: submission was made by another assignee — read-only for me
-  if(sub&&sub.status!=='Editing'&&sub.userId&&sub.userId!==S.uid){
+  const prog=_ansProgress(c,date);
+  // Already closed: the run is shared, so whoever pressed Submit closed it for everyone.
+  if(sub&&sub.status!=='Editing'){
     const by=uById(sub.userId);
     const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-    return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#0D7A4E;font-weight:600">'+ic('check','w-3.5 h-3.5')+'Completed by '+esc(by?fullName(by):'a teammate')+(st?' · '+st:'')+'</span><span></span>';
-  }
-  // Guard: never show Submit if already submitted (catches stale RUN state)
-  if(sub&&sub.status!=='Editing'){
-    const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-    const eb=(sub.editCount||0)>0?'<span style="font-size:10px;font-weight:700;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px">edit #'+sub.editCount+'</span>':'';
-    const left='<span style="font-size:12px;color:#B8B5AC">Submitted '+st+eb+'</span>';
-    let right='';
-    if(hasEditReq)right='<span style="font-size:12px;font-weight:600;color:#F97316">Edit pending</span>';
-    else if(editApproved)right='<button onclick="App._resubmit(\''+cid+'\',\''+date+'\')" class="submit-pill go">Edit &amp; Resubmit</button>';
-    else if(sub.status==='Pending Approval'||sub.status==='Pending')right='<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>';
-    else if(u?.rules?.edit&&u?.managerId)right='<button onclick="App._reqEdit(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#0D7A4E;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;cursor:pointer;padding:7px 16px">Request edit</button>';
+    const left='<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#0D7A4E;font-weight:600">'+ic('check','w-3.5 h-3.5')+'Submitted by '+esc(by?fullName(by):'a teammate')+(st?' · '+st:'')+'</span>';
+    const right=(sub.status==='Pending Approval'||sub.status==='Pending')
+      ?'<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>'
+      :'<span style="font-size:11.5px;color:#B8B5AC">Use <strong>Request edit</strong> on an answer to change it</span>';
     return left+right;
   }
-  if(!sub){
-    if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
-    if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#9CA3AF">Scheduled for this date</span><button class="submit-pill no" disabled style="opacity:.4;cursor:not-allowed">Not yet</button>';
-    return '<span></span><span style="display:inline-flex;gap:8px"><button onclick="App._saveClDraft(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;cursor:pointer;padding:7px 14px">Save draft</button><button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit</button></span>';
+  if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
+  if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#9CA3AF">Scheduled for this date</span><button class="submit-pill no" disabled style="opacity:.4;cursor:not-allowed">Not yet</button>';
+
+  /* The checklist can only be submitted once EVERY question has a submitted answer — that is
+     the whole point of answering them one at a time. Until then the button says what is left. */
+  if(prog.total&&!prog.complete){
+    const left=prog.total-prog.done;
+    return '<span style="font-size:12px;color:#B8B5AC">'+prog.done+' of '+prog.total+' answers submitted</span>'
+      +'<button class="submit-pill no" disabled title="Submit every question first" style="opacity:.45;cursor:not-allowed">'+left+' question'+(left===1?'':'s')+' left</button>';
   }
-  // Editing mode
-  if(sub.status==='Editing'){
-    return '<span style="font-size:12px;font-weight:700;color:#0EA5E9">Editing\u2026</span><span style="display:inline-flex;gap:8px"><button onclick="App._saveClDraft(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;cursor:pointer;padding:7px 14px">Save draft</button><button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit edit</button></span>';
-  }
-  return '';
+  return '<span style="font-size:12px;color:#0D7A4E;font-weight:600">All answers in — ready to submit</span>'
+    +'<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">✓ Submit checklist</button>';
 }
 /* PHASE4b: save the in-progress run as a server-backed draft (one per checklist+date, own rows only).
    Photos are stripped; everything else (answers, numbers, options) resumes on any device. */
@@ -291,28 +256,24 @@ function _clCard(c,date){
   const sub=subForCl(c,S.uid,date);
   const today=todayISO();
   const isPast=date<today;const isFuture=date>today;const u=me();
-  const st=sub?sub.status:isFuture?'Upcoming':isPast?'Late':c.scheduleTime&&nowHM()>hm2m(c.scheduleTime)?'Late':'Pending';
+  const prog=_ansProgress(c,date);
+  const st=sub?sub.status:isFuture?'Upcoming':_clOverdue(c,date)?'Late':prog.done?'In progress':'Pending';
   const exp=S.expandedCl===c.id;
-  // If sub exists and is not in Editing mode, tasks are locked — don't init a fresh RUN
   const isSubmitted=!!sub&&sub.status!=='Editing';
-  // Only initialise fresh RUN if: no entry, date changed, OR not currently editing
-  if(!RUN[c.id]||(RUN[c.id].date!==date&&RUN[c.id].status!=='Editing')){
-    // Restore questionResponses from existing submission if available
-    const _existSub=subForCl(c,S.uid,date);
-    RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(_existSub?.questionResponses||[]))};
-    // PHASE4b: no submission for this day → resume the saved server draft (works across devices).
-    if(!isSubmitted&&!(RUN[c.id].questionResponses||[]).length){
-      const _dr=_draftFor('checklist',c.id,date);
-      if(_dr&&_dr.payload&&Array.isArray(_dr.payload.questionResponses)&&_dr.payload.questionResponses.length){
-        RUN[c.id].questionResponses=JSON.parse(JSON.stringify(_dr.payload.questionResponses));
-      }
+  /* RUN holds only the UNSUBMITTED working values — anything already submitted lives in
+     tm_answers, shared with everyone else on this checklist. */
+  if(!RUN[c.id]||RUN[c.id].date!==date){
+    RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:[],questionResponses:[]};
+    const _dr=_draftFor('checklist',c.id,date);
+    if(_dr&&_dr.payload&&Array.isArray(_dr.payload.questionResponses)&&_dr.payload.questionResponses.length){
+      RUN[c.id].questionResponses=JSON.parse(JSON.stringify(_dr.payload.questionResponses));
     }
   }
   const run=RUN[c.id];
-  const hasEditReq=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Pending');
-  const editApproved=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Approved');
-  const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late','Editing':'st-pend','Upcoming':'st-pend'};
-  const stBar={'On Time':'#22C55E','Submitted':'#22C55E','Pending':'#F59E0B','Late':'#EF4444','Pending Approval':'#F97316','Rejected':'#EF4444','Editing':'#0EA5E9','Upcoming':'#A855F7'};
+  const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','In progress':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late','Editing':'st-pend','Upcoming':'st-pend'};
+  const stBar={'On Time':'#22C55E','Submitted':'#22C55E','Pending':'#F59E0B','In progress':'#0EA5E9','Late':'#EF4444','Pending Approval':'#F97316','Rejected':'#EF4444','Editing':'#0EA5E9','Upcoming':'#A855F7'};
+  const contribs=_ansContributors(c.id,date);
+  const dl=_clDeadlineLabel(c);
 
   return`<div class="clc" style="border-top:3px solid ${stBar[st]||'#EEECE8'}">
     <!-- Header -->
@@ -321,19 +282,10 @@ function _clCard(c,date){
         <div class="fd" style="font-size:15px;font-weight:800;color:#111110">${esc(c.name)}</div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
           ${c.department?`<span style="font-size:12px;color:#B8B5AC">${esc(c.department)}</span>`:''}
-          ${c.anyOne?`<span title="Any one assignee can complete this" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#EEF2FF;color:#4338CA;flex-shrink:0">${ic('users','w-3 h-3')}Any one</span>`:''}
-          ${c.description?`<span style="font-size:11px;color:#B8B5AC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${esc(c.description)}</span>`:''}
-          ${(()=>{
-            const total=(c.questionIds||[]).length;if(!total)return'';
-            const answered=(run?.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;
-            const allAnswered=!isSubmitted&&answered>=total;
-            if(isSubmitted){
-              // After submit: show attempt + compliance badges (read-only, locked)
-              return _subBadges(c,sub,{small:true});
-            }
-            return`<span style="font-size:11px;font-weight:600;color:${allAnswered?'#0E9F6E':'#9CA3AF'};flex-shrink:0">${answered}/${total} attempted</span>`;
-          })()}
-          ${(!isSubmitted&&_draftFor('checklist',c.id,date))?`<span title="A saved draft exists — it loads automatically on any of your devices" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#FEF3C7;color:#92400E;flex-shrink:0">${ic('edit','w-3 h-3')}Draft</span>`:''}
+          ${dl?`<span title="Deadline" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:${_clOverdue(c,date)&&!isSubmitted?'#DC2626':'#B8B5AC'};flex-shrink:0">${ic('clock','w-3 h-3')}${esc(dl)}</span>`:''}
+          ${prog.total?(isSubmitted?_subBadges(c,sub,{small:true})
+            :`<span style="font-size:11px;font-weight:700;color:${prog.complete?'#0E9F6E':'#9CA3AF'};flex-shrink:0">${prog.done}/${prog.total} submitted</span>`):''}
+          ${contribs.length?`<span style="display:inline-flex;align-items:center;margin-left:2px" title="${esc(contribs.map(fullName).join(', '))}">${contribs.slice(0,4).map(x=>`<span style="margin-right:-6px">${avatar(x,'w-5 h-5','text-[8px]')}</span>`).join('')}${contribs.length>4?`<span style="margin-left:10px;font-size:10px;color:#B8B5AC">+${contribs.length-4}</span>`:''}</span>`:''}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -345,59 +297,12 @@ function _clCard(c,date){
     <!-- Questions + Footer -->
     ${exp?`<div>
       ${(()=>{
-        const qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
+        const qs=_clQuestions(c);
         if(!qs.length)return'';
-        const locked=isSubmitted&&(!run||run.status!=='Editing');
-        return'<div style="padding:12px 16px;border-top:1px solid #F5F4F0;display:flex;flex-direction:column;gap:10px">'+qs.map((q,qi)=>{
-          const qr=(run.questionResponses||[]).find(r=>r.questionId===q.id)||{};
-          const resp=qr.response??null;
-          const TYPE_LABELS={answer:'Answer',number:'Number',passfail:'Pass/Fail',yesno:'Yes/No',tick:'Tick/Cross'};
-          let inputHtml='';
-          if(locked){
-            inputHtml='<span style="font-size:13px;font-weight:600;color:#0E9F6E">'+(resp!==null&&resp!==undefined?esc(String(resp)):'<em style="color:#D1D5DB">Not answered</em>')+'</span>';
-          } else if(q.type==='answer'){
-            inputHtml='<div style="display:flex;flex-wrap:wrap;gap:6px">'+(q.options||[]).map((o,oi)=>`<button onclick="App._setQROpt('${c.id}','${q.id}',${oi})" style="padding:6px 14px;border-radius:20px;border:1.5px solid ${resp===o.text?'#15171C':'#E5E7EB'};background:${resp===o.text?'#15171C':'#fff'};color:${resp===o.text?'#fff':'#374151'};font-size:12px;font-weight:600;cursor:pointer">${esc(o.text)}</button>`).join('')+'</div>';
-          } else if(q.type==='number'){
-            inputHtml=`<input type="number" value="${resp??''}" oninput="App._setQR('${c.id}','${q.id}',this.value,true)" onchange="App._setQR('${c.id}','${q.id}',this.value)" placeholder="Enter number…" style="width:120px;padding:6px 12px;border-radius:9px;border:1.5px solid #E5E7EB;font-size:13px;outline:none"/>`;
-          } else if(q.type==='passfail'){
-            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Pass')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Pass'?'#16A34A':'#E5E7EB'};background:${resp==='Pass'?'#DCFCE7':'#fff'};color:${resp==='Pass'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Pass</button><button onclick="App._setQR('${c.id}','${q.id}','Fail')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Fail'?'#DC2626':'#E5E7EB'};background:${resp==='Fail'?'#FEE2E2':'#fff'};color:${resp==='Fail'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Fail</button></div>`;
-          } else if(q.type==='yesno'){
-            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Yes')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Yes'?'#16A34A':'#E5E7EB'};background:${resp==='Yes'?'#DCFCE7':'#fff'};color:${resp==='Yes'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Yes</button><button onclick="App._setQR('${c.id}','${q.id}','No')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='No'?'#DC2626':'#E5E7EB'};background:${resp==='No'?'#FEE2E2':'#fff'};color:${resp==='No'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">No</button></div>`;
-          } else if(q.type==='tick'){
-            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Done'?'#16A34A':'#E5E7EB'};background:${resp==='Done'?'#DCFCE7':'#fff'};color:${resp==='Done'?'#16A34A':'#374151'};font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center">${ic('check','w-5 h-5')}</button><button onclick="App._setQR('${c.id}','${q.id}','Not done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Not done'?'#DC2626':'#E5E7EB'};background:${resp==='Not done'?'#FEE2E2':'#fff'};color:${resp==='Not done'?'#DC2626':'#374151'};font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center">${ic('x','w-5 h-5')}</button></div>`;
-          }
-          const _fl=(n,t)=>'<span style="display:inline-flex;align-items:center;gap:3px;vertical-align:middle">'+ic(n,'w-3 h-3')+t+'</span>';
-          const flags=[];if(q.photo)flags.push(_fl('cam','Required'));if(q.approval)flags.push(_fl('check','Approval'));if(q.comment)flags.push(_fl('msg','Required'));
-          // Photo upload — always shown; q.photo flag only makes it mandatory at submit.
-          // Supports MULTIPLE photos via r.photos[]; falls back to legacy r.photo for old data.
-          if(!locked){
-            const _qrPhoto=(run.questionResponses||[]).find(r=>r.questionId===q.id)||{};
-            const photos=_qrPhotoList(_qrPhoto);
-            inputHtml+='<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-              +photos.map((ph,pi)=>'<div style="position:relative;display:inline-block"><img src="'+ph+'" alt="Task response photo" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1.5px solid #BBF7D0;cursor:pointer"/><button onclick="App._clearQRPhoto(\''+c.id+'\',\''+q.id+'\','+pi+')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#EF4444;border:1.5px solid #fff;color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center;font-weight:700">×</button></div>').join('')
-              +'<label style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;background:'+(photos.length?'#F0FDF4':'#F3F4F6')+';color:'+(photos.length?'#16A34A':'#374151')+';font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid '+(photos.length?'#BBF7D0':'#E5E7EB')+'">'
-              +ic('cam','w-3.5 h-3.5')+(photos.length?'Add more':'Add photo')+(q.photo&&!photos.length?' <span style="color:#EF4444">*</span>':'')
-              +'<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="App._setQRPhoto(\''+c.id+'\',\''+q.id+'\',this)"/>'
-              +'</label>'
-              +'</div>';
-          } else {
-            const _qr2=(sub?.questionResponses||[]).find(r=>r.questionId===q.id)||{};
-            const photos2=_qrPhotoList(_qr2);
-            if(photos2.length)inputHtml+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+photos2.map(ph=>'<img src="'+ph+'" loading="lazy" decoding="async" alt="Task response photo" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:110px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')+'</div>';
-          }
-          return`<div style="background:#FAFAFA;border:1px solid #ECEDF0;border-radius:12px;padding:12px 14px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-              <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${Q_TYPE_BG[q.type]||'#F6F7F8'};color:${Q_TYPE_CLR[q.type]||'#6B7280'}">${TYPE_LABELS[q.type]||q.type}</span>
-              <span style="font-size:13px;font-weight:600;color:#15171C">${esc(q.text)}</span>
-              ${flags.length?`<span style="margin-left:auto;font-size:11px;color:#9CA3AF">${flags.join(' · ')}</span>`:''}
-            </div>
-            ${inputHtml}
-            ${!locked?`<textarea oninput="App._setQRComment('${c.id}','${q.id}',this.value)" placeholder="${q.comment?'Comment (required)…':'Add a comment (optional)…'}" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1.5px solid ${q.comment?'#FCA5A5':'#E5E7EB'};border-radius:9px;font-size:12px;resize:none;outline:none;font-family:inherit;background:#fff" rows="2">${esc(qr.comment||'')}</textarea>`:''}
-            ${locked&&qr.comment?`<div style="margin-top:6px;font-size:12px;color:#6B7280;font-style:italic;padding:5px 8px;background:#F9FAFB;border-radius:7px">"${esc(qr.comment)}"</div>`:''}
-          </div>`;
-        }).join('')+'</div>';
+        return'<div style="padding:12px 16px;border-top:1px solid #F5F4F0;display:flex;flex-direction:column;gap:10px">'
+          +qs.map(q=>_qCard(c,q,date,isSubmitted)).join('')+'</div>';
       })()}
-      <div class="clc-ft">${_clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved)}</div>
+      <div class="clc-ft">${_clFooter(c,date,sub,isPast,isFuture,u,false,false)}</div>
       ${sub?DB.feedback.filter(fb=>fb.checklistId===c.id&&fb.userId===S.uid&&fb.date===date).map(fb=>{
         const mgr=uById(fb.managerId);
         return`<div style="background:#EFF6FF;border-top:1px solid #BFDBFE;padding:12px 18px">
@@ -411,9 +316,91 @@ function _clCard(c,date){
   </div>`;
 }
 
+/* ── ONE question inside a run ──
+   Three states: unanswered (inputs + Submit), submitted (locked, with who and when), or
+   unlocked by an approved edit (inputs again, pre-filled, + Submit). */
+function _qCard(c,q,date,runSubmitted){
+  const TYPE_LABELS={answer:'Answer',number:'Number',passfail:'Pass/Fail',yesno:'Yes/No',tick:'Tick/Cross'};
+  const ans=_ansFor(c.id,date,q.id);
+  const locked=!!(ans&&ans.locked);
+  const run=RUN[c.id]||{questionResponses:[]};
+  // While unlocked for an edit, the inputs start from the submitted values.
+  if(ans&&!ans.locked&&!(run.questionResponses||[]).some(r=>r.questionId===q.id)){
+    (run.questionResponses=run.questionResponses||[]).push({questionId:q.id,response:ans.response,comment:ans.comment||'',photos:(ans.photos||[]).slice()});
+  }
+  const qr=(run.questionResponses||[]).find(r=>r.questionId===q.id)||{};
+  const resp=locked?(ans.response??null):(qr.response??null);
+  const hdr=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${Q_TYPE_BG[q.type]||'#F6F7F8'};color:${Q_TYPE_CLR[q.type]||'#6B7280'}">${TYPE_LABELS[q.type]||q.type}</span>
+      <span style="font-size:13px;font-weight:600;color:#15171C">${esc(q.text)}</span>
+      ${(()=>{const _fl=(n,t)=>'<span style="display:inline-flex;align-items:center;gap:3px;vertical-align:middle">'+ic(n,'w-3 h-3')+t+'</span>';
+        const f=[];if(q.photo)f.push(_fl('cam','Photo'));if(q.comment)f.push(_fl('msg','Comment'));
+        return f.length?`<span style="margin-left:auto;font-size:11px;color:#9CA3AF">${f.join(' · ')}</span>`:'';})()}
+    </div>`;
 
+  // ── submitted & locked ──
+  if(locked){
+    const by=uById(ans.submittedBy);
+    const pend=_ansEditPending(ans.id);
+    const mine=ans.submittedBy===S.uid;
+    const canApprove=can('checklists','approve')||isAdmin();
+    const photos=_qrPhotoList(ans);
+    return`<div style="background:#F7FBF9;border:1px solid #CFEBDF;border-radius:12px;padding:12px 14px">
+      ${hdr}
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:800;color:#0B7A55">${ic('check','w-4 h-4')}${esc(String(resp??'—'))}</span>
+      </div>
+      ${ans.comment?`<div style="margin-top:6px;font-size:12px;color:#6B7280;font-style:italic;padding:5px 8px;background:#fff;border-radius:7px">"${esc(ans.comment)}"</div>`:''}
+      ${photos.length?`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${photos.map(ph=>'<img src="'+esc(ph)+'" loading="lazy" decoding="async" alt="Answer photo" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:110px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')}</div>`:''}
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;padding-top:8px;border-top:1px dashed #D7E9E0">
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:#5B7F6E">
+          ${by?avatar(by,'w-5 h-5','text-[8px]'):''}
+          <span><strong style="color:#15171C">${esc(by?fullName(by):'Unknown')}</strong> · ${ans.submittedAt?new Date(ans.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>
+        </span>
+        ${ans.editCount?`<span title="Changed ${ans.editCount} time(s) after the first submission" style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:#FEF3C7;color:#92400E">edited ${ans.editCount}×</span>`:''}
+        <span style="margin-left:auto;display:inline-flex;gap:6px">
+          ${pend?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:#FFFBEB;color:#92400E">${ic('clock','w-3 h-3')}Edit requested</span>`
+            :mine?`<button onclick="App._ansEditAsk('${c.id}','${date}','${q.id}')" style="font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:8px;border:1px solid #E5E7EB;background:#fff;color:#374151;cursor:pointer">${ic('edit','w-3 h-3')} Request edit</button>`:''}
+          ${(canApprove&&!pend)?`<button onclick="App._ansUnlock('${c.id}','${date}','${q.id}')" title="Unlock this answer so it can be changed" style="font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:8px;border:1px solid #E5E7EB;background:#fff;color:#374151;cursor:pointer">Unlock</button>`:''}
+        </span>
+      </div>
+    </div>`;
+  }
 
+  // ── open for answering ──
+  const unlocked=!!(ans&&!ans.locked);
+  let inputHtml='';
+  if(q.type==='answer'){
+    inputHtml='<div style="display:flex;flex-wrap:wrap;gap:6px">'+(q.options||[]).map((o,oi)=>`<button onclick="App._setQROpt('${c.id}','${q.id}',${oi})" style="padding:6px 14px;border-radius:20px;border:1.5px solid ${resp===o.text?'#15171C':'#E5E7EB'};background:${resp===o.text?'#15171C':'#fff'};color:${resp===o.text?'#fff':'#374151'};font-size:12px;font-weight:600;cursor:pointer">${esc(o.text)}</button>`).join('')+'</div>';
+  } else if(q.type==='number'){
+    inputHtml=`<input type="number" value="${resp??''}" oninput="App._setQR('${c.id}','${q.id}',this.value,true)" onchange="App._setQR('${c.id}','${q.id}',this.value)" placeholder="Enter number…" style="width:120px;padding:6px 12px;border-radius:9px;border:1.5px solid #E5E7EB;font-size:13px;outline:none"/>`;
+  } else if(q.type==='passfail'){
+    inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Pass')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Pass'?'#16A34A':'#E5E7EB'};background:${resp==='Pass'?'#DCFCE7':'#fff'};color:${resp==='Pass'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Pass</button><button onclick="App._setQR('${c.id}','${q.id}','Fail')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Fail'?'#DC2626':'#E5E7EB'};background:${resp==='Fail'?'#FEE2E2':'#fff'};color:${resp==='Fail'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Fail</button></div>`;
+  } else if(q.type==='yesno'){
+    inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Yes')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Yes'?'#16A34A':'#E5E7EB'};background:${resp==='Yes'?'#DCFCE7':'#fff'};color:${resp==='Yes'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Yes</button><button onclick="App._setQR('${c.id}','${q.id}','No')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='No'?'#DC2626':'#E5E7EB'};background:${resp==='No'?'#FEE2E2':'#fff'};color:${resp==='No'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">No</button></div>`;
+  } else if(q.type==='tick'){
+    inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Done'?'#16A34A':'#E5E7EB'};background:${resp==='Done'?'#DCFCE7':'#fff'};color:${resp==='Done'?'#16A34A':'#374151'};font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center">${ic('check','w-5 h-5')}</button><button onclick="App._setQR('${c.id}','${q.id}','Not done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Not done'?'#DC2626':'#E5E7EB'};background:${resp==='Not done'?'#FEE2E2':'#fff'};color:${resp==='Not done'?'#DC2626':'#374151'};font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center">${ic('x','w-5 h-5')}</button></div>`;
+  }
+  // Photos — always offered; q.photo only makes one mandatory at submit.
+  const photos=_qrPhotoList(qr);
+  inputHtml+='<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +photos.map((ph,pi)=>'<div style="position:relative;display:inline-block"><img src="'+esc(ph)+'" alt="Answer photo" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1.5px solid #BBF7D0;cursor:pointer"/><button onclick="App._clearQRPhoto(\''+c.id+'\',\''+q.id+'\','+pi+')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#EF4444;border:1.5px solid #fff;color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center;font-weight:700">×</button></div>').join('')
+    +'<label style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;background:'+(photos.length?'#F0FDF4':'#F3F4F6')+';color:'+(photos.length?'#16A34A':'#374151')+';font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid '+(photos.length?'#BBF7D0':'#E5E7EB')+'">'
+    +ic('cam','w-3.5 h-3.5')+(photos.length?'Add more':'Add photo')+(q.photo&&!photos.length?' <span style="color:#EF4444">*</span>':'')
+    +'<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="App._setQRPhoto(\''+c.id+'\',\''+q.id+'\',this)"/>'
+    +'</label></div>';
 
+  const ready=resp!==null&&resp!==undefined&&resp!=='';
+  return`<div style="background:#FAFAFA;border:1px solid ${unlocked?'#BFDBFE':'#ECEDF0'};border-radius:12px;padding:12px 14px">
+    ${hdr}
+    ${unlocked?`<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#1D4ED8;background:#EFF6FF;border-radius:8px;padding:5px 9px;margin-bottom:9px">${ic('edit','w-3 h-3')}Unlocked for editing — submit again when you're done</div>`:''}
+    ${inputHtml}
+    <textarea oninput="App._setQRComment('${c.id}','${q.id}',this.value)" placeholder="${q.comment?'Comment (required)…':'Add a comment (optional)…'}" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1.5px solid ${q.comment?'#FCA5A5':'#E5E7EB'};border-radius:9px;font-size:12px;resize:none;outline:none;font-family:inherit;background:#fff" rows="2">${esc(qr.comment||'')}</textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:9px">
+      <button ${ready?'':'disabled'} onclick="App._ansSubmit('${c.id}','${date}','${q.id}')" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;padding:8px 16px;border-radius:9px;border:none;cursor:${ready?'pointer':'not-allowed'};background:${ready?'#0E9F6E':'#E5E7EB'};color:${ready?'#fff':'#9CA3AF'}">${ic('check','w-3.5 h-3.5')}${unlocked?'Submit change':'Submit answer'}</button>
+    </div>
+  </div>`;
+}
 
 App._setQROpt=(clId,qId,optIdx)=>{
   // Resolve the option text by index so the free-form (admin-authored) option
@@ -492,7 +479,6 @@ App._setQRComment=(clId,qId,val)=>{
   else{RUN[clId].questionResponses.push({questionId:qId,response:null,comment:val});}
   clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
 };
-App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(sub.questionResponses||[])),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();render();};
 App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged');render();};
 
 // ── Photo persistence (Fix #5) ──
@@ -511,151 +497,61 @@ function _dataUrlToBlob(dataUrl){
     return new Blob([arr],{type:mime});
   }catch(e){return null;}
 }
-async function _uploadSubmissionPhotos(clId,userId,date,responses){
-  const out=(responses||[]).map(r=>({...r}));
-  for(const r of out){
-    // Build the working list (photos[] + any legacy single photo)
-    let list=[];
-    if(Array.isArray(r.photos))list.push(...r.photos);
-    if(r.photo)list.push(r.photo);
-    if(!list.length)continue;
-    const uploaded=[];
-    for(let i=0;i<list.length;i++){
-      const p=list[i];
-      if(!p||typeof p!=='string'){continue;}
-      if(!p.startsWith('data:')){uploaded.push(p);continue;} // already a URL/placeholder
-      try{
-        const blob=_dataUrlToBlob(p);
-        if(!blob){uploaded.push('[photo]');continue;}
-        const ext=(blob.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/gi,'')||'jpg';
-        const path='submissions/'+clId+'/'+userId+'/'+date+'/'+r.questionId+'_'+Date.now()+'_'+i+'.'+ext;
-        const {error}=await sb.storage.from('documents').upload(path,blob,{cacheControl:'3600',upsert:true,contentType:blob.type});
-        if(error){console.warn('[photo upload]',error.message);uploaded.push('[photo]');continue;}
-        const {data:urlData}=sb.storage.from('documents').getPublicUrl(path);
-        uploaded.push(urlData?.publicUrl||'[photo]');
-      }catch(e){console.warn('[photo upload failed]',e.message);uploaded.push('[photo]');}
-    }
-    r.photos=uploaded;
-    r.photo=null; // consolidated into photos[]
-  }
-  return out;
-}
-
 App._submitRun=async(clId,date)=>{
-  const c=clById(clId);const run=RUN[clId];if(!run)return;
-  const existingSub=subFor(clId,S.uid,date);if(existingSub&&existingSub.status!=='Editing'){toast('Already submitted for this date','warn');return;}
-  // Group ("any one") checklist already completed by a teammate → read-only, block duplicate submit
-  if(c&&c.anyOne&&!existingSub){
-    const peerDone=DB.submissions.find(s=>s.checklistId===clId&&s.date===date&&s.userId!==S.uid&&s.status!=='Editing');
-    if(peerDone){const by=uById(peerDone.userId);toast('Already completed by '+(by?fullName(by):'a teammate'),'warn');delete RUN[clId];S.expandedCl=null;render();return;}
+  const c=clById(clId);if(!c)return;
+  /* The run is SHARED — one submission per checklist per day, whoever closes it. */
+  const existing=runSub(clId,date);
+  if(existing&&existing.status!=='Editing'){
+    const by=uById(existing.userId);
+    toast('Already submitted'+(by&&by.id!==S.uid?' by '+fullName(by):'')+' for this date','warn');
+    delete RUN[clId];S.expandedCl=null;render();return;
   }
-  // ── Validate mandatory fields before submitting ──
-  const _qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
-  // 1) Every question must be answered first.
-  if(_qs.length){
-    const _unanswered=_qs.filter(_q=>{const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};return _qr.response===null||_qr.response===undefined||_qr.response==='';});
-    if(_unanswered.length){toast('Please answer all '+_qs.length+' question'+((_qs.length>1)?'s':'')+' before submitting','err');return;}
+  // Every question must carry a submitted answer — that gate is the feature.
+  const qs=_clQuestions(c);
+  const prog=_ansProgress(c,date);
+  if(qs.length&&!prog.complete){
+    toast('Submit all '+qs.length+' answers first — '+(prog.total-prog.done)+' still open','err');return;
   }
-  // 2) Enforce mandatory photo/comment on EVERY question (independent of each other).
-  //    Each requirement is checked against that question's own response only.
-  for(const _q of _qs){
-    const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};
-    if(_q.photo&&!_qrHasPhoto(_qr)){
-      toast('Photo required for: "'+_q.text.slice(0,40)+'"','err');return;
-    }
-    if(_q.comment&&(!_qr.comment||!_qr.comment.trim())){
-      toast('Comment required for: "'+_q.text.slice(0,40)+'"','err');return;
-    }
-  }
-  const today=todayISO();
-  const late=date<today||(date===todayISO()&&c.scheduleTime&&nowHM()>hm2m(c.scheduleTime));
-  const _ua=(me()?.approval)||{};
-  const _isPast=date<todayISO();const _isFut=date>todayISO();
-  const dateAppr=(_isPast&&_ua.past)||(_isFut&&_ua.future);
-  const needsAppr=dateAppr;
-  const isResub=run.status==='Editing';run.status=needsAppr?'Pending Approval':late?'Late':'On Time';run.submittedAt=new Date().toISOString();const u=me();const mgrId=u?.managerId;if(isResub){const ei=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);if(ei>-1){const ex=DB.submissions[ei];ex.tasks=JSON.parse(JSON.stringify(run.tasks));ex.questionResponses=JSON.parse(JSON.stringify(run.questionResponses||[]));ex.status=run.status;ex.submittedAt=run.submittedAt;ex.editCount=run.editCount||0;ex.editHistory=run.editHistory||[];}if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Resubmitted after edit #'+(run.editCount||1),createdAt:new Date().toISOString(),isResubmit:true});if(mgrId&&_inappOn('checklist')&&(!_ns||_ns.inapp_submission_submitted!==false))DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'Re-submitted: '+fullName(u)+' edited and resubmitted — needs re-approval',time:new Date().toISOString(),read:false,kind:'submission'});}}else{run.id=uid('s');DB.submissions.push(JSON.parse(JSON.stringify(run)));if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});_invalidateNotifCache();}}
-  if(needsAppr){
-    const apprText='🔔 Approval needed: '+fullName(u)+' submitted "'+c.name+'" — awaiting your review';
-    const _subNotifOn=_inappOn('checklist')&&(!_ns||_ns.inapp_submission_submitted!==false);
-    if(mgrId&&_subNotifOn)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
-    const adminU2=DB.users.find(x=>isSuperU(x));
-    if(adminU2&&adminU2.id!==mgrId&&_subNotifOn)DB.notifications.unshift({id:uid('n'),userId:adminU2.id,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
-  }
-  log(fullName(u),'Submitted '+run.status,c.name);
-  _draftDelete('checklist',clId,date); // PHASE4b: submitted → the draft leaves the drafts table
-  toast(needsAppr?'Submitted — pending approval':'Submitted',late||needsAppr?'warn':'ok');
-  // Process escalations — only on first submission, not resubmits
-  if(!isResub)_processEscalations(clId,date,run.questionResponses||[]);
-  // questionResponses already in run — will be included in push/update below
-  // Capture the original responses (may contain base64 photos) so we can persist photos
-  // to Storage in the background after the instant render (Fix #5).
-  const _origQR=JSON.parse(JSON.stringify(run.questionResponses||[]));
-  const _subId=run.id;
-  const _inlineP=r=>(Array.isArray(r.photos)&&r.photos.some(p=>typeof p==='string'&&p.startsWith('data:')))||(typeof r.photo==='string'&&r.photo.startsWith('data:'));
-  const _hasInlinePhoto=_origQR.some(_inlineP);
-  // Strip base64 photos before sending to Supabase (store placeholder; URLs persisted in bg)
-  const _stripP=p=>(typeof p==='string'&&p.startsWith('data:'))?'[photo]':p;
-  const srQR=(run.questionResponses||[]).map(r=>{
-    const o={...r};
-    if(Array.isArray(o.photos))o.photos=o.photos.map(_stripP);
-    if(o.photo)o.photo=_stripP(o.photo);
-    return o;
+  // Build the submission from the shared answers so the existing approvals, analytics
+  // and CSV exports keep reading exactly the shape they always have.
+  const responses=qs.map(q=>{
+    const a2=_ansFor(clId,date,q.id)||{};
+    return{questionId:q.id,response:a2.response??null,comment:a2.comment||'',photos:(a2.photos||[]).slice(),
+      answeredBy:a2.submittedBy||null,answeredAt:a2.submittedAt||null};
   });
-  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:srQR,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
-  // 1. Save immediately (saveDB strips photos before writing)
+
+  const today=todayISO();
+  const late=_clOverdue(c,date);
+  const _ua=(me()?.approval)||{};
+  const _isPast=date<today,_isFut=date>today;
+  const needsAppr=(_isPast&&_ua.past)||(_isFut&&_ua.future);
+  const u=me();const mgrId=u?.managerId;
+  const status=needsAppr?'Pending Approval':late?'Late':'On Time';
+  const rec={id:uid('s'),checklistId:clId,userId:S.uid,date,tasks:[],questionResponses:responses,
+    status,submittedAt:new Date().toISOString(),editCount:0,editHistory:[]};
+  DB.submissions.push(rec);
+  if(needsAppr){
+    DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});
+    const apprText='🔔 Approval needed: '+fullName(u)+' submitted "'+c.name+'" — awaiting your review';
+    const on=_inappOn('checklist')&&(!_ns||_ns.inapp_submission_submitted!==false);
+    if(mgrId&&on)_hrmNotify(mgrId,apprText,'submission','approvals');
+    const admin=DB.users.find(x=>isSuperU(x));
+    if(admin&&admin.id!==mgrId&&on)_hrmNotify(admin.id,apprText,'submission','approvals');
+    _invalidateNotifCache();
+  }
+  log(fullName(u),'Submitted '+status,c.name);
+  _draftDelete('checklist',clId,date);
+  toast(needsAppr?'Submitted — pending approval':'Checklist submitted',late||needsAppr?'warn':'ok');
+  _processEscalations(clId,date,responses);
+
+  const sr={id:rec.id,checklist_id:clId,user_id:S.uid,date,status,submitted_at:rec.submittedAt,
+    tasks:[],question_responses:responses,edit_count:0,edit_history:[]};
   saveDB();
-  // 2. Render immediately — UI updates in <50ms
   delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();_touchAction();render();
-  // 3. Save ONLY this submission to Supabase (targeted — not full _sync of 11 tables)
   sb.from('submissions').upsert(sr,{onConflict:'id'}).then(({error})=>{
     if(error)console.warn('sub upsert:',error.message);
-    // 3a. Persist photos to Storage in the background, then re-save the submission with
-    // durable URLs (Fix #5). Entirely optional — submission already succeeded above.
-    if(_hasInlinePhoto){
-      _uploadSubmissionPhotos(clId,S.uid,date,_origQR).then(uploadedQR=>{
-        const anyUrl=uploadedQR.some(r=>(Array.isArray(r.photos)&&r.photos.some(p=>typeof p==='string'&&p.startsWith('http')))||(typeof r.photo==='string'&&r.photo.startsWith('http')));
-        if(!anyUrl)return; // nothing persisted (all failed) — leave placeholders, no-op
-        // Patch the in-memory record so managers see the real photo without a reload
-        const rec=DB.submissions.find(s=>s.id===_subId);
-        if(rec)rec.questionResponses=uploadedQR;
-        saveDB();
-        // Re-upsert just this submission with the URL-bearing responses
-        sb.from('submissions').upsert({id:_subId,checklist_id:clId,user_id:S.uid,date,status:sr.status,submitted_at:sr.submitted_at,tasks:sr.tasks,question_responses:uploadedQR,edit_count:sr.edit_count,edit_history:sr.edit_history},{onConflict:'id'})
-          .then(({error})=>{if(error)console.warn('[photo re-upsert]',error.message);})
-          .catch(e=>console.warn('[photo re-upsert failed]',e.message));
-      }).catch(e=>console.warn('[photo persist]',e.message));
-    }
-    // After submission saved, sync notifications/approvals/issues in background
-    Promise.allSettled([
-      DB.approvals.length?sb.from('approvals').upsert(DB.approvals.filter(a=>a.requesterId===S.uid||can('checklists','approve')||isAdmin()||isHR()).map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}):Promise.resolve(),
-      sb.from('notifications').upsert(DB.notifications.slice(0,50).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString(),kind:n.kind||null,target_route:n.targetRoute||null})),{onConflict:'id'}),
-      DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.filter(t=>t.createdBy===S.uid||t.assignedTo===S.uid||t.submitterId===S.uid||can('tickets','changeStatus')||can('tickets','resolve')||isAdmin()||isHR()).map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve(),
-    ]).catch(()=>{});
   }).catch(e=>console.warn('sub upsert failed:',e.message));
-};
-App._reqEdit=(clId,date)=>{modalShell({title:'Request edit',sub:'Manager approval required to edit a submission.',size:'max-w-sm',body:`<textarea id="re-n" rows="3" placeholder="Reason for edit…" class="ui-input rf"></textarea>`,footer:btnG('Cancel','App.closeModal()')+btnP('Send request',`App._sendReq('${clId}','${date}')`)});};
-App._sendReq=(clId,date)=>{
-  const note=$('#re-n')?.value.trim()||'Edit requested';
-  const u=me();
-  // Guard: prevent duplicate pending edit requests for same checklist+date
-  const existingReq=DB.approvals.find(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===clId&&a.date===date&&a.status==='Pending');
-  if(existingReq){toast('Edit request already pending — awaiting manager approval','warn');closeModal();return;}
-  DB.approvals.push({id:uid('a'),type:'Edit Request',requesterId:S.uid,checklistId:clId,date,status:'Pending',note,createdAt:new Date().toISOString()});
-  // Mark submission status as "Pending Approval" to show in UI
-  const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);
-  if(sub)sub.editRequestStatus='Pending';
-  // Notify manager
-  const mgrId=u?.managerId;
-  const clName=clById(clId)?.name||'a checklist';
-  const _edReqNotifOn=_inappOn('checklist')&&(!_ns||_ns.inapp_approval_requested!==false);
-  if(mgrId){if(_edReqNotifOn)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'✏️ Edit request from '+fullName(u)+' for "'+clName+'" on '+fmtS(date),time:new Date().toISOString(),read:false,kind:'edit'});
-    if(typeof queueEmail==='function')queueEmail('approval_requested',mgrId,clId,date,{checklist_name:clName,employee_name:fullName(u)});} // FINAL-FIX
-  // Notify admin if not same as manager
-  const admin=DB.users.find(x=>isSuperU(x));
-  if(admin&&admin.id!==mgrId&&_edReqNotifOn)DB.notifications.unshift({id:uid('n'),userId:admin.id,text:'Edit request: '+fullName(u)+' — '+clName,time:new Date().toISOString(),read:false,kind:'edit'});
-  _invalidateNotifCache();log(fullName(u),'Edit request',clName);
-  toast('Edit request sent to your manager');saveDB();closeModal();render();
 };
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.COLL=COLL;window.homeDash=homeDash;window.myClsPage=myClsPage;window._clFooter=_clFooter;window._qrPhotoList=_qrPhotoList;window._qrHasPhoto=_qrHasPhoto;window._clCard=_clCard;window._dataUrlToBlob=_dataUrlToBlob;window._uploadSubmissionPhotos=_uploadSubmissionPhotos;
+window.COLL=COLL;window.homeDash=homeDash;window.myClsPage=myClsPage;window._clFooter=_clFooter;window._qrPhotoList=_qrPhotoList;window._qrHasPhoto=_qrHasPhoto;window._clCard=_clCard;window._dataUrlToBlob=_dataUrlToBlob;window._qCard=_qCard;
