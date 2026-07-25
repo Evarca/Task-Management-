@@ -1,0 +1,521 @@
+/* ════════ Evarca DESIGN TOKENS (2026 refresh) ════════
+   Single source of truth. Brand green is ONE token (--c-brand) so it's swappable.
+   Literals elsewhere in the file are legacy; new components reference these vars. */
+:root{
+  /* surfaces / neutrals — clean, airy, faintly cool greys */
+  --c-bg:#F7F8FA;            /* app canvas */
+  --c-surface:#FFFFFF;       /* cards / sheets */
+  --c-surface-2:#F3F5F8;     /* subtle raised / hover fills */
+  --c-paper:#F7F8FA;
+  --c-border:#EBEDF1;        /* hairline borders */
+  --c-border-2:#DBDFE6;      /* stronger borders / inputs */
+  /* ink / text */
+  --c-ink:#161A22;           /* near-black: headings, primary fill */
+  --c-ink-hover:#0C0E14;
+  --c-text:#1B2029;          /* body */
+  --c-text-2:#586273;        /* secondary (AA on white) */
+  --c-text-3:#8A93A3;        /* muted captions */
+  /* brand accent */
+  --c-brand:#0E9F6E; --c-brand-hover:#0C8C61; --c-brand-soft:#E8F8F1; --c-brand-ink:#0A6B49;
+  /* semantic */
+  --c-success:#0E9F6E; --c-success-soft:#E8F8F1; --c-success-ink:#0A6B49;
+  --c-warn:#D97706; --c-warn-soft:#FEF4E5; --c-warn-ink:#92560A;
+  --c-danger:#DC2626; --c-danger-hover:#B91C1C; --c-danger-soft:#FDEDED; --c-danger-ink:#991B1B;
+  --c-info:#0284C7; --c-info-soft:#E7F5FC; --c-info-ink:#075985;
+  --c-approve:#F97316;
+  /* spacing scale */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+  /* radius — soft, modern */
+  --r-sm:10px; --r-md:13px; --r-lg:18px; --r-xl:24px; --r-pill:999px;
+  /* shadows — soft, diffuse, layered */
+  --sh-xs:0 1px 2px rgba(20,28,46,.04);
+  --sh-sm:0 1px 2px rgba(20,28,46,.04),0 4px 10px -3px rgba(20,28,46,.06);
+  --sh-md:0 8px 24px -8px rgba(20,28,46,.13),0 3px 8px -3px rgba(20,28,46,.07);
+  --sh-pop:0 28px 72px -18px rgba(20,28,46,.30),0 10px 28px -12px rgba(20,28,46,.16);
+  /* type scale */
+  --fs-h1:27px; --fs-h2:19px; --fs-card:14.5px; --fs-body:14px; --fs-cap:11.5px;
+  --ring:0 0 0 3.5px rgba(14,159,110,.20);
+}
+/* ─ Evarca base ─ */
+html,body{height:100%}
+body{font-family:"Hanken Grotesk",sans-serif;font-size:14px;line-height:1.5;background:var(--c-bg);color:var(--c-text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overscroll-behavior:none}
+.fd{font-family:"Schibsted Grotesk",sans-serif;letter-spacing:-.01em}
+
+/* ════════ Component primitives (token-driven) ════════ */
+/* Buttons */
+.ui-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:"Hanken Grotesk",sans-serif;font-weight:600;font-size:14px;line-height:1;padding:10px 17px;min-height:42px;border-radius:var(--r-md);border:1.5px solid transparent;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,opacity .15s,transform .1s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.ui-btn:active{transform:translateY(1px) scale(.985)}
+.ui-btn:focus-visible{outline:none;box-shadow:var(--ring)}
+.ui-btn-md{padding:10px 17px;min-height:42px}
+.ui-btn-sm{padding:7px 13px;min-height:34px;font-size:13px;border-radius:var(--r-sm)}
+.ui-btn-primary{background:var(--c-ink);color:#fff;box-shadow:0 1px 2px rgba(20,28,46,.16),0 2px 8px -2px rgba(20,28,46,.18)}
+.ui-btn-primary:hover{background:var(--c-ink-hover);box-shadow:0 2px 4px rgba(20,28,46,.2),0 6px 16px -4px rgba(20,28,46,.24)}
+.ui-btn-brand{background:var(--c-brand);color:#fff;box-shadow:0 1px 2px rgba(14,159,110,.25),0 4px 12px -3px rgba(14,159,110,.4)}
+.ui-btn-brand:hover{background:var(--c-brand-hover);box-shadow:0 2px 5px rgba(14,159,110,.3),0 8px 20px -4px rgba(14,159,110,.45)}
+.ui-btn-ghost{background:var(--c-surface);color:var(--c-text);border-color:var(--c-border-2)}
+.ui-btn-ghost:hover{background:var(--c-surface-2);border-color:var(--c-text-3)}
+.ui-btn-subtle{background:var(--c-surface-2);color:var(--c-text-2);border-color:transparent}
+.ui-btn-subtle:hover{background:var(--c-border)}
+.ui-btn-danger{background:var(--c-danger);color:#fff;box-shadow:0 2px 10px -3px rgba(220,38,38,.4)}
+.ui-btn-danger:hover{background:var(--c-danger-hover)}
+.ui-btn[disabled],.ui-btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed;pointer-events:none}
+/* Inputs */
+.ui-input,.ui-select{width:100%;box-sizing:border-box;background:var(--c-surface);border:1.5px solid var(--c-border-2);border-radius:var(--r-md);padding:11px 14px;font-size:14px;color:var(--c-text);transition:border-color .15s,box-shadow .15s,background .15s;font-family:inherit;-webkit-appearance:none;appearance:none}
+/* ── Safari normalisation: native <select>/<date>/<time> controls render with heavy off-design chrome
+   in Safari (double-chevron, inset look, odd heights). Reset appearance everywhere and supply our own
+   chevron so selects match the rest of the UI in every browser. ── */
+select{-webkit-appearance:none !important;-moz-appearance:none !important;appearance:none !important;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>") !important;background-repeat:no-repeat !important;background-position:right 11px center !important;padding-right:34px !important}
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
+input[type=date]::-webkit-calendar-picker-indicator,input[type=time]::-webkit-calendar-picker-indicator{opacity:.5}
+.ui-input::placeholder{color:var(--c-text-3)}
+.ui-input:hover,.ui-select:hover{border-color:var(--c-text-3)}
+.ui-input:focus,.ui-select:focus{outline:none;border-color:var(--c-brand);box-shadow:var(--ring)}
+.ui-label{display:block;font-size:12.5px;font-weight:600;color:var(--c-text-2);margin-bottom:7px}
+/* Card */
+.ui-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);box-shadow:var(--sh-sm)}
+.ui-card-pad{padding:20px}
+.ui-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;border-bottom:1px solid var(--c-border)}
+.ui-card-title{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;color:var(--c-text)}
+/* Tab / chip bar */
+.ui-tabs{display:inline-flex;gap:3px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:var(--r-md);padding:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.ui-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:8px 15px;min-height:38px;border-radius:9px;border:none;background:transparent;color:var(--c-text-2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.ui-tab:hover{color:var(--c-text);background:rgba(20,28,46,.04)}
+.ui-tab.on{background:var(--c-surface);color:var(--c-ink);box-shadow:var(--sh-sm);font-weight:700}
+.ui-tab:focus-visible{outline:none;box-shadow:var(--ring)}
+.ui-tab-pill{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;min-height:38px;border-radius:var(--r-pill);border:1.5px solid var(--c-border-2);background:var(--c-surface);color:var(--c-text-2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.ui-tab-pill:hover{border-color:var(--c-text-3);color:var(--c-text)}
+.ui-tab-pill.on{background:var(--c-ink);color:#fff;border-color:var(--c-ink)}
+/* Badge / count */
+.ui-count{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;line-height:1;border-radius:var(--r-pill);padding:2px 6px;min-width:18px;height:18px;color:#fff}
+/* Table */
+.ui-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.ui-table th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--c-text-3);padding:10px 14px;border-bottom:1px solid var(--c-border)}
+.ui-table td{padding:12px 14px;border-bottom:1px solid var(--c-border);color:var(--c-text)}
+.ui-table tbody tr{transition:background .12s}
+.ui-table tbody tr:hover{background:var(--c-surface-2)}
+.ui-table tbody tr:last-child td{border-bottom:none}
+/* Skeleton */
+.ui-skel{background:linear-gradient(90deg,#eceef2 25%,#f5f6f8 37%,#eceef2 63%);background-size:400% 100%;animation:uiskel 1.3s ease infinite;border-radius:8px}
+@keyframes uiskel{0%{background-position:100% 0}100%{background-position:-100% 0}}
+/* Nav (sidebar) */
+.nav-item{position:relative;width:100%;display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;transition:background .14s,color .14s;text-align:left;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.62);background:transparent}
+.nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.nav-item.on{background:rgba(255,255,255,.1);color:#fff;font-weight:700}
+.nav-item.on::before{content:"";position:absolute;left:3px;top:50%;transform:translateY(-50%);width:3px;height:16px;border-radius:3px;background:var(--c-brand)}
+.nav-item.on .nav-ico{color:var(--c-brand)}
+.nav-item:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(255,255,255,.4)}
+.nav-ico{width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:rgba(255,255,255,.55)}
+.nav-sec-hdr{width:100%;display:flex;align-items:center;gap:8px;padding:11px 12px 6px;border:none;background:transparent;cursor:pointer;color:rgba(255,255,255,.42);font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;transition:color .14s}
+.nav-sec-hdr:hover{color:rgba(255,255,255,.72)}
+.nav-chev{margin-left:auto;transition:transform .2s ease}
+.nav-sec.collapsed .nav-chev{transform:rotate(-90deg)}
+.nav-sec.collapsed .nav-sec-body{display:none}
+/* Brand mark */
+.nav-brand{width:32px;height:32px;border-radius:10px;background:url(data:image/png;base64,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) center/contain no-repeat;color:transparent;display:grid;place-items:center;font-family:"Schibsted Grotesk",sans-serif;font-weight:800;font-size:16px;flex-shrink:0;box-shadow:none}
+/* Modal/toast pop-in */
+.pop{animation:uipop .2s cubic-bezier(.16,1,.3,1)}
+@keyframes uipop{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+/* focus-visible rings on native inputs */
+.ui-input:focus-visible,.ui-select:focus-visible{outline:none}
+.rf:focus-visible{box-shadow:var(--ring);border-color:var(--c-brand)!important}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#D6D8DE;border-radius:4px}
+html{scrollbar-width:thin;scrollbar-color:#D6D8DE transparent}
+input,select,textarea{outline:none}
+.rf:focus{box-shadow:0 0 0 3px rgba(16,185,129,.15);border-color:#10B981!important}
+/* Toggles */
+.tog{position:relative;width:40px;height:24px;border-radius:12px;background:var(--c-border-2);transition:background .18s;cursor:pointer;border:none;flex-shrink:0}
+.tog span{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .18s cubic-bezier(.16,1,.3,1);box-shadow:0 1px 3px rgba(0,0,0,.22)}
+.tog.on{background:var(--c-brand)}.tog.on span{transform:translateX(16px)}
+.tog:focus-visible{outline:none;box-shadow:var(--ring)}
+/* Calendar strip */
+.cal4{background:#fff;border-radius:18px;border:1px solid #F0EEE9;display:flex;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.cal4-d{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 4px 8px;cursor:pointer;transition:background .12s;border:none;background:transparent;gap:2px}
+.cal4-d.sel{background:#15171C}.cal4-d:not(.sel):hover{background:#F9F8F5}
+.cal4-lbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#B8B5AC}
+.cal4-d.sel .cal4-lbl{color:rgba(255,255,255,.4)}
+.cal4-num{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#15171C}
+.cal4-num.tod{background:#15171C;color:#fff}
+.cal4-d.sel .cal4-num{color:#fff}
+/* Checklist card */
+
+/* ─ TASK ROW ─ compact, fresh ─ */
+.tk{border-top:1px solid #F5F4F0;position:relative}
+
+/* Segmented response control */
+
+/* Icon action buttons */
+
+/* Submit btn */
+
+/* Filter dropdown */
+
+/* Day/date picker chips */
+.dchip{cursor:pointer;user-select:none;display:inline-flex;align-items:center;justify-content:center;border-radius:20px;padding:4px 10px;border:1.5px solid #D6D8DE;font-size:12px;font-weight:600;color:#6B7280;transition:all .12s}
+.dchip.on{background:#15171C;color:#fff;border-color:#15171C}
+
+/* iz / issue-zone (legacy, kept for compatibility) */
+.bg-ink-100{background:#ECEDF0!important}.bg-ink-200{background:#D6D8DE!important}
+.fld-card,.team-card-hover,.dept-card,.loc-card{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.fld-card:hover{border-color:#0E9F6E!important;box-shadow:0 8px 22px -6px rgba(14,159,110,.18);transform:translateY(-2px)}
+.team-card-hover:hover{border-color:#0E9F6E!important;box-shadow:0 10px 24px -8px rgba(14,159,110,.2)!important;transform:translateY(-2px)}
+.dept-card:hover{border-color:#0E9F6E!important;box-shadow:0 10px 24px -8px rgba(14,159,110,.18);transform:translateY(-2px)}
+.loc-card:hover{border-color:#3B82F6!important;box-shadow:0 10px 24px -8px rgba(59,130,246,.18);transform:translateY(-2px)}
+.shadow-soft{box-shadow:0 1px 4px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)}
+/* Progress bar — used in admin dashboard department performance */
+.pg{height:6px;background:#ECEDF0;border-radius:3px;overflow:hidden}
+.pgf{height:100%;background:#0E9F6E;border-radius:3px;transition:width .3s}
+
+.text-ink-300{color:#A9ADB8!important}.text-ink-400{color:#6B7280!important}.text-ink-500{color:#3A3E48!important}
+.text-ink-600{color:#262A33!important}
+.border-ink-100{border-color:#ECEDF0!important}.border-ink-200{border-color:#D6D8DE!important}
+.bg-brand-50{background:#ECFDF5!important}
+.text-brand-600{color:#10B981!important}.text-brand-700{color:#059669!important}
+.text-emerald-700{color:#047857!important}
+.text-amber-700{color:#B45309!important}
+.text-rose-700{color:#BE123C!important}
+.text-orange-700{color:#C2410C!important}
+.bg-sky-50{background:#F0F9FF!important}.text-sky-700{color:#0369A1!important}
+
+@media(min-width:768px){#main-wrap{margin-left:224px!important}}
+
+/* ════════ ROBUST RESPONSIVE SHELL — independent of the Tailwind CDN ════════
+   The app shell's layout + show/hide relied on Tailwind utility classes (hidden,
+   md:hidden, md:flex, fixed, sticky, flex-col, z-*). The codebase already hand-rolls
+   Tailwind COLOR utilities (see .text-ink-*, .bg-brand-* above) because the CDN is
+   often unavailable (offline / file://) — but the STRUCTURAL + responsive classes were
+   never given fallbacks, so when the CDN is dead the sidebar loses its positioning and
+   the mobile chrome (hamburger, bell, mobile profile, bottom nav) leaks onto desktop.
+   These rules make the shell fully self-sufficient at the 768px breakpoint. */
+/* Sidebar — fully positioned here so it does not depend on Tailwind's fixed/inset/w-56. */
+.sidebar{position:fixed;top:0;bottom:0;left:0;width:224px;z-index:30;flex-direction:column;overflow-y:auto}
+/* Sticky topbar (sticky/top-0/z-20). */
+.topbar{position:sticky;top:0;z-index:20}
+/* Main column. */
+#main-wrap{display:flex;flex-direction:column}
+/* Bottom mobile nav (fixed/bottom-0/inset-x-0/z-30). */
+.mob-nav{position:fixed;bottom:0;left:0;right:0;z-index:30}
+@media(min-width:768px){
+  .sidebar{display:flex!important}        /* desktop: show the collapsible sidebar */
+  .md\:hidden,.mob-nav{display:none!important}  /* desktop: hide all mobile-only chrome */
+  .md\:inline{display:inline!important}    /* desktop: show the "Create" button label */
+  .md\:block{display:block!important}
+  .md\:flex{display:flex!important}
+}
+@media(max-width:767px){
+  .sidebar{display:none!important}         /* mobile: hide the sidebar, use bottom nav + More */
+  #main-wrap{margin-left:0!important}
+}
+/* Base utility fallbacks the shell/login rely on (Tailwind defines these; we replicate for
+   the offline/CDN-blocked case). Responsive show-variants above override .hidden where needed. */
+.hidden{display:none}
+.overflow-hidden{overflow:hidden}
+@media(min-width:1024px){
+  .lg\:flex{display:flex!important}        /* login: desktop split panel */
+  .lg\:hidden{display:none!important}      /* login: mobile-only brand */
+}
+
+/* ════════ RESPONSIVE POLISH (Wave 1 — desktop + mobile) ════════
+   Consistent breakpoint: 768px = the sidebar/bottom-nav switch (matches Tailwind md:).
+   These rules harden layout for BOTH viewports without touching markup/handlers. */
+/* No accidental horizontal overflow anywhere. */
+html,body{max-width:100%;overflow-x:hidden}
+#content{min-width:0}
+/* Tables: never blow out the viewport — wrap them in a horizontal scroller on small screens.
+   Any .ui-table / raw <table> inside #content gets a scroll parent via overflow-x on its wrapper. */
+#content table{max-width:100%}
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* Mobile: tighten page padding, guarantee ≥44px tap targets on interactive controls, keep content
+   clear of the bottom nav + iOS safe area. */
+@media(max-width:767px){
+  #content{padding-left:16px!important;padding-right:16px!important;padding-bottom:calc(84px + env(safe-area-inset-bottom))!important}
+  .ui-btn-sm{min-height:38px}
+  /* stat/card grids: never narrower than a comfortable tap row */
+  .grid{gap:.6rem}
+  /* native selects/inputs comfortable to tap */
+  select.rf,input.rf,.ui-input,.ui-select{min-height:44px}
+  /* calendar day cells & nav buttons stay tappable */
+  .csd,.cal4-d{min-height:52px}
+  /* modals: full-height bottom sheet that scrolls, never clipped */
+  #modal>[role=dialog]{max-height:92vh}
+}
+/* Desktop: keep forms/content from stretching uncomfortably wide; cap reading width on text pages. */
+@media(min-width:768px){
+  #content{padding-left:28px!important;padding-right:28px!important}
+  /* a single-column form inside a card shouldn't stretch full 1152px — cap inputs' parents */
+  .form-narrow{max-width:560px}
+}
+/* ════════ RESPONSIVE POLISH (Wave 2 — Evarca mobile pass) ════════
+   Closes the gaps Wave 1 left: iOS focus-zoom, 3-across modal field grids, canvas overflow,
+   comfortable modal footers. Markup untouched — CSS only, so desktop is pixel-identical. */
+@media(max-width:767px){
+  /* iOS Safari zooms the whole page when focusing any control under 16px — pin controls to 16px. */
+  .ui-input,.ui-select,input.rf,select.rf,textarea.rf,#modal input,#modal select,#modal textarea{font-size:16px!important}
+  /* Field grids inside modals: 3-across is unusable at phone width — collapse to 2 columns. */
+  #modal .grid.grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Charts and images never push the page wider than the viewport. */
+  #content canvas,#content img{max-width:100%}
+  /* Modal footer buttons: comfortable tap targets. */
+  #modal .ui-btn{min-height:44px}
+  /* Long unbroken strings (emails, serials, URLs) wrap instead of forcing horizontal scroll.
+     R26: `overflow-wrap:anywhere` ALSO shrinks a cell's min-content width to one character, so a
+     table with an unshrinkable neighbour column (a 200px <select>, a button pair) crushed the name
+     column to ~12px and rendered every name one letter per line — Access Control was 21,662px tall.
+     `break-word` wraps the same long strings but leaves min-content intact. Never go back to
+     `anywhere` here without re-running work/mobile-audit. */
+  #content td,#content th{word-break:normal;overflow-wrap:break-word}
+}
+/* ════════ RESPONSIVE POLISH (Wave 3 — compact mobile pass) ════════
+   Owner feedback: tables cramped, cards/buttons misaligned, text wrapping, sub-tabs on 2 lines.
+   `.hscroll` = ONE-LINE horizontally scrollable strip (tab bars, chip rows) — no wrapping ever. */
+.hscroll{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:100%}
+.hscroll::-webkit-scrollbar{display:none}
+.hscroll>*{flex-shrink:0}
+@media(max-width:767px){
+  /* Denser type + headings — much less 2-line wrapping */
+  :root{--fs-h1:21px}
+  #content{padding-left:12px!important;padding-right:12px!important}
+  /* Cards: tighter padding so 2-up rows align cleanly */
+  #content .ui-card,#content .ui-card-pad{padding:12px}
+  #content .bg-white.rounded-2xl.p-4,#content .bg-white.rounded-2xl.p-5{padding:12px}
+  /* Tables: compact cells + smaller text → more columns fit before scrolling */
+  #content table{font-size:12px}
+  #content th{padding:7px 8px!important;font-size:9.5px!important}
+  #content td{padding:7px 8px!important}
+  /* Buttons: smaller, consistent height — no ragged rows */
+  .ui-btn{padding:7px 12px;font-size:12.5px;min-height:36px}
+  .ui-btn-md{min-height:36px}
+  .ui-tabs .ui-tab{padding:7px 11px;min-height:34px;font-size:12px}
+  /* Sub-tab pills (ui-tabs) already scroll; force nowrap so they never stack */
+  .ui-tabs{flex-wrap:nowrap}
+  /* Status / count chips: never break mid-chip */
+  #content span[class]{overflow-wrap:normal}
+  /* OKR compact rows: drop the meta line + inline bar on phones — title, %, values, status stay */
+  .okr-meta{display:none}
+  .okr-bar{display:none}
+}
+/* ════════ TABLET BAND 768–1023px (R26) ════════
+   The sidebar switches on at 768px and eats 224px, so "desktop" layouts get ~490px there — narrower
+   than the phone-to-desktop jump suggests. These rules keep fixed-size content inside that band. */
+/* Charts were only capped on phones; a 300px canvas in a 219px card overflowed on tablets too. */
+#content canvas{max-width:100%}
+@media(min-width:768px) and (max-width:1023px){
+  /* any 2-up card grid inside a page collapses — there is not room for two cards beside each other */
+  #content .grid.md\:grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* modal field rows: 3-across does not fit either */
+  #modal .grid.grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* ════════ LEAVE TYPES — delete button (R26) ════════ */
+.lt-del{width:34px;height:34px;flex-shrink:0;display:grid;place-items:center;border:1px solid var(--c-border);border-radius:9px;background:var(--c-surface);color:var(--c-text-3);cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.lt-del:hover{background:var(--c-danger-soft,#FEF2F2);color:var(--c-danger,#DC2626);border-color:#FECACA}
+/* ════════ COMPLIANCE — editable gratuity tiers (R26) ════════ */
+.cmp-tier{display:flex;align-items:flex-end;gap:10px;padding:10px;border:1px solid var(--c-border);border-radius:12px;margin-bottom:8px;background:var(--c-surface)}
+.cmp-tier-n{width:24px;height:24px;flex-shrink:0;border-radius:50%;background:var(--c-surface-2);color:var(--c-text-2);font-size:11px;font-weight:800;display:grid;place-items:center;margin-bottom:6px}
+.cmp-tier-f{flex:1;min-width:0}
+.cmp-tier-f label{display:block;font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.cmp-tier-f input{width:100%;min-width:0;background:var(--c-surface);border:1px solid var(--c-border);border-radius:9px;padding:8px 10px;font-size:13px;color:var(--c-text)}
+.cmp-tier-hint{font-size:11px;color:var(--c-text-3);white-space:nowrap;flex-shrink:0;margin-bottom:9px}
+.cmp-tier-x{width:32px;height:32px;flex-shrink:0;display:grid;place-items:center;border:1px solid #FECACA;border-radius:9px;background:var(--c-surface);color:#B91C1C;cursor:pointer;margin-bottom:2px}
+.cmp-tier-x[disabled]{opacity:.35;cursor:default}
+@media(max-width:767px){
+  /* four columns do not fit a phone — stack the fields, keep the number badge on the first line */
+  .cmp-tier{flex-wrap:wrap;align-items:stretch}
+  .cmp-tier-f{flex:1 1 100%}
+  .cmp-tier-hint{flex:1 1 auto;margin-bottom:0;align-self:center}
+  .cmp-tier-x{min-width:36px;min-height:36px;margin-bottom:0}
+}
+/* ════════ ATTENDANCE LOG (R26) ════════
+   The log used to sit in a 2-column grid beside the calendar, so its 6 columns were squeezed into
+   half the page and "24 Jul 2026" wrapped over 3 lines. It is now a full-width row; these rules
+   keep the date/time/hours columns on one line and style the From/To range bar. */
+.att-log td,.att-log th{white-space:nowrap}
+.att-log td:last-child,.att-log th:last-child{white-space:normal}
+/* flag chips wrap as whole chips, never mid-label ("No fence at clock-out" went 5 lines at 768px) */
+.att-log td:last-child span{white-space:nowrap;display:inline-block}
+.att-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.att-presets{display:flex;gap:6px}
+.att-preset{font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);cursor:pointer;white-space:nowrap;min-height:32px}
+.att-preset:hover{background:var(--c-surface-2)}
+.att-preset.on{background:var(--c-ink,#15171C);border-color:var(--c-ink,#15171C);color:#fff}
+.att-dates{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+.att-dates input[type=date]{min-width:0;background:var(--c-surface);border:1px solid var(--c-border);border-radius:9px;padding:6px 9px;font-size:12.5px;color:var(--c-text)}
+.att-clear{font-size:12px;font-weight:700;padding:6px 10px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);cursor:pointer;white-space:nowrap;min-height:32px}
+@media(max-width:767px){
+  /* stack the two halves of the filter so neither is squeezed */
+  .att-filter{flex-direction:column;align-items:stretch;gap:8px}
+  .att-dates{width:100%}
+  .att-dates input[type=date]{flex:1;min-width:0}
+}
+/* ════════ RESPONSIVE POLISH (Wave 4 — R26, measured) ════════
+   Every rule below closes a defect measured by work/mobile-audit (headless Chrome at 390×844),
+   not a guess. Re-run `node work/mobile-audit/audit.mjs` after touching this block. */
+@media(max-width:767px){
+  /* Tap targets that measured under ~32px. The "how it works" tip bar's dismiss was 8×14px —
+     effectively untappable — and its Linked: chips were 23px tall. */
+  .how-x{min-width:34px;min-height:34px;margin:-6px -6px 0 0;font-size:18px!important}
+  .how-chip{padding:6px 12px!important;min-height:32px}
+  .ann-x{width:36px!important;height:36px!important}
+  /* Lifecycle cards: the fixed 110px progress column squeezed the name column to ~84px, so long
+     names spilled out of their box. Narrower bar on phones + the name may now break. */
+  .lc-prog{width:64px!important}
+  /* Native date inputs are pinned to 16px on mobile (iOS zoom guard above), which inflates their
+     intrinsic width — a two-input date range then overflowed its flex row. */
+  #content input[type=date]{min-width:0}
+  /* Standalone icon buttons that measured under 32px. Deliberately NOT applied to the OKR compact
+     rows (22px icons) or .tog switches — those are compact by design (R5) and enlarging them
+     would undo that layout. */
+  .help-q{min-width:36px;min-height:36px}
+  .af-ico{min-width:34px;min-height:34px}
+}
+/* Safe-area aware sticky topbar on notched devices */
+.topbar{padding-top:env(safe-area-inset-top)}
+/* Subtle top sync bar (W1.1) — indeterminate progress shown during a background _lazyLoad. */
+#syncbar{position:fixed;top:0;left:0;right:0;height:2px;z-index:60;background:transparent;pointer-events:none;opacity:0;transition:opacity .2s}
+#syncbar.on{opacity:1}
+#syncbar::before{content:'';position:absolute;left:0;top:0;height:100%;width:40%;background:var(--c-brand);border-radius:2px;animation:syncslide 1.1s ease-in-out infinite}
+@keyframes syncslide{0%{left:-40%}50%{left:30%}100%{left:100%}}
+
+/* ═══ Checklist v6 — Card + Table layout ═══ */
+
+/* Status bar on left edge */
+
+/* Task table row */
+
+/* Pill response buttons */
+
+/* Icon action */
+
+/* Submit strip */
+
+/* Issue panel */
+
+/* ═══ Checklist UI vFinal ═══ */
+/* Calendar */
+.cal-strip{display:flex;background:#fff;border-radius:16px;border:1px solid #EEECE8;overflow:hidden}
+.csd{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 0 8px;cursor:pointer;border:none;background:transparent;gap:3px;transition:background .1s;min-width:0}
+.csd:hover:not(.act){background:#F9F8F5}
+.csd.act{background:#111110}
+.csd-lbl{font-size:9px;font-weight:800;letter-spacing:.08em;color:#B8B5AC;text-transform:uppercase}
+.csd.act .csd-lbl{color:rgba(255,255,255,.4)}
+.csd-n{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:15px;font-weight:800;color:#111110}
+.csd.act .csd-n{color:#fff}
+.csd-dots{display:flex;gap:2px;height:5px;align-items:center}
+/* Checklist card */
+.clc{border-radius:18px;overflow:hidden;border:1px solid #EEECE8;background:#fff;transition:box-shadow .2s}
+.clc-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;border:none;background:transparent;width:100%;gap:10px}
+.clc-hdr:active{background:#FAFAF8}
+/* Status styles */
+.st-on{background:#E8FAF3;color:#0D7A4E}
+.st-late{background:#FFEDED;color:#C92C2C}
+.st-pend{background:#FEF7E6;color:#B36A00}
+.st-sub{background:#E8FAF3;color:#0D7A4E}
+.st-pa{background:#FFF0E6;color:#B85000}
+/* Task row — THE KEY ELEMENT */
+
+ /* positive active */
+ /* negative active */
+/* Small icon button */
+
+/* Footer strip */
+.clc-ft{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-top:1px solid #F7F6F3;gap:10px;background:#FAFAF8}
+.submit-pill{padding:8px 20px;border-radius:9px;font-size:13px;font-weight:700;border:none;cursor:pointer;transition:all .15s}
+.submit-pill.go{background:#111110;color:#fff}.submit-pill.go:hover{background:#000;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.submit-pill.no{background:#EEECE8;color:#C8C5BD;cursor:default}
+/* Issue zone */
+
+/* ═══ Task row vFresh ═══ */
+
+/* Orb */
+
+/* Response inline chips */
+
+/* Action icon */
+
+/* ── Page transitions ── */
+.fade{animation:fi .18s ease}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+/* A2: respect reduced-motion — disable animations/transitions for users who ask for it */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+/* ── Loading btn ── */
+
+/* Button click feedback */
+button:active{opacity:.75;transform:scale(.97);transition:transform .1s}
+/* A1: keyboard focus ring for bespoke inline buttons (the .ui-* primitives set their own). */
+button:focus-visible{outline:none;box-shadow:var(--ring);border-radius:8px}
+.ui-btn:focus-visible,.ui-tab:focus-visible,.nav-item:focus-visible,.ui-tab-pill:focus-visible{border-radius:inherit}
+/* R1: analytics stat/chart grids — 2-up (stats) / stacked (charts) on mobile, full on desktop.
+   R26: the multi-column step moved from 768px to 1024px. At exactly 768px the sidebar (224px) also
+   appears, leaving ~488px of content — two 338px chart cards do not fit in that, so the charts hung
+   ~150px outside their column. Between 768 and 1024 the sidebar is showing, so stay single/2-up. */
+.astat-grid{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+.achart-grid{display:grid;gap:12px;grid-template-columns:1fr}
+@media(min-width:1024px){.astat-grid{grid-template-columns:repeat(4,1fr)}.achart-grid{grid-template-columns:1fr 1fr}}
+/* Clickable stat cards */
+.stat-card-click:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)!important}
+.stat-card-click:active{transform:scale(.98);opacity:.9}
+
+/* ── §9 Org-chart tree (pure CSS connector lines, no libraries — classic <ul>/<li> technique) ── */
+.org-tree,.org-tree ul{display:flex;list-style:none;margin:0;padding:0}
+.org-tree li{display:flex;flex-direction:column;align-items:center;position:relative;padding:20px 10px 0 10px}
+/* horizontal connectors: left half + right half meeting at centre-top of each node */
+.org-tree li::before,.org-tree li::after{content:'';position:absolute;top:0;width:50%;height:20px;border-top:2px solid #E2E4EA}
+.org-tree li::before{right:50%;border-right:2px solid #E2E4EA}
+.org-tree li::after{left:50%}
+/* only one child → drop side branches, keep a single straight vertical stem */
+.org-tree li:only-child::after{display:none}
+.org-tree li:only-child::before{right:auto;left:50%;width:2px;border-top:0;border-right:2px solid #E2E4EA}
+/* first/last child trim the dangling horizontal line on the outer edge */
+.org-tree li:first-child::before{border:0}
+.org-tree li:last-child::after{border:0}
+.org-tree li:last-child::before{border-right:2px solid #E2E4EA;border-radius:0 6px 0 0}
+.org-tree li:first-child::after{border-radius:6px 0 0 0;border-left:2px solid #E2E4EA}
+/* roots (only the outermost tree): no incoming line */
+.org-tree-root>li::before,.org-tree-root>li::after{display:none}
+.org-tree-root>li{padding-top:0}
+/* down-stub from a parent card to its children row */
+.org-tree li.org-parent>.org-children{position:relative;padding-top:20px}
+.org-tree li.org-parent>.org-children::before{content:'';position:absolute;top:0;left:50%;width:2px;height:20px;background:#E2E4EA}
+.org-card{position:relative;z-index:1}
+.org-scroll{overflow:auto;-webkit-overflow-scrolling:touch}
+/* Print: hide nav/topbar so only the page body prints. */
+@media print{
+  .sidebar,.topbar,.mobnav,.mob-nav,#bottom-nav{display:none!important}
+  #main-wrap{margin-left:0!important}
+  #content{padding:0!important;max-width:none!important}
+  @page{margin:14mm}
+}
+
+/* ===== #polish block (was <style id="polish"> in the original head) ===== */
+/* ── finishing touches: consistent numbers, cards, pills, tables, mobile grids ── */
+table{font-variant-numeric:tabular-nums}
+.ui-btn{white-space:nowrap}
+.ui-card{transition:box-shadow .18s ease}
+.ui-card:hover{box-shadow:0 3px 14px rgba(16,24,40,.07)}
+.ui-tab-pill{border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer}
+.ui-tab-pill.on{background:var(--c-ink);color:#fff;border-color:var(--c-ink)}
+.ui-select,.ui-input{font-family:inherit}
+h1.fd{text-wrap:balance}
+.ac-people tbody tr{transition:background .12s}
+.ac-people tbody tr:hover{background:var(--c-surface-2)}
+/* one height for every control that sits in a filter/action row → rows align by default */
+input.ui-input:not([type="date"]):not([type="month"]):not([type="number"]),select.ui-select{min-height:40px}
+.ui-btn-md,.ui-btn:not(.ui-btn-sm){min-height:40px}
+@media(max-width:760px){
+  .ac-grid{grid-template-columns:1fr !important}
+  th,td{padding-left:8px !important;padding-right:8px !important}
+}
+
+/* ── POLISH PASS (professional feel: motion, focus, scroll, details) ── */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#D3D7DE;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#B9BEC7;border:2px solid transparent;background-clip:content-box}
+summary::-webkit-details-marker{display:none}
+details>summary{transition:background .15s ease}
+details[open]>summary{background:var(--c-surface-2)!important}
+.ui-btn{transition:transform .12s ease,box-shadow .15s ease,background .15s ease,color .15s ease,border-color .15s ease}
+.ui-btn:active{transform:scale(.97)}
+.ui-btn-brand:hover,.ui-btn-primary:hover{box-shadow:0 4px 14px -4px rgba(14,159,110,.45)}
+h1.fd{text-wrap:balance}
+.ui-card{transition:box-shadow .18s ease,transform .18s ease}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}

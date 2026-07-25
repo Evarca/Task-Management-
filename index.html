@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="description" content="Evarca — team checklists, tickets and task management."/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Evarca</title>
+<link rel="icon" href="/favicon.ico" sizes="any"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"/>
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png"/>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+<link rel="manifest" href="/site.webmanifest"/>
+<meta name="theme-color" content="#0E9F6E"/>
+<script>(()=>{const w=console.warn;console.warn=(...a)=>{if(typeof a[0]==='string'&&a[0].includes('cdn.tailwind'))return;w(...a)};window.addEventListener('error',e=>{if(e.filename&&(e.filename.includes('cdn.tailwind')||e.filename.includes('fonts.google')))e.stopImmediatePropagation();},true);})();</script>
+<script src="https://cdn.tailwindcss.com/3.4.16"></script><!-- R24: pinned exact version (was floating latest) -->
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>if(typeof tailwind!=='undefined')tailwind.config={theme:{extend:{fontFamily:{display:['"Schibsted Grotesk"'],sans:['"Hanken Grotesk"']},colors:{ink:{DEFAULT:'#15171C',50:'#F6F7F8',100:'#ECEDF0',200:'#D6D8DE',300:'#A9ADB8',400:'#6B7280',500:'#3A3E48',600:'#262A33',700:'#1C1F26',800:'#15171C'},brand:{DEFAULT:'#0E9F6E',50:'#ECFDF5',100:'#D1FAE5',400:'#34D399',500:'#10B981',600:'#0E9F6E',700:'#0B7A55'},paper:'#F7F6F2'},boxShadow:{soft:'0 1px 2px rgba(16,24,40,.04),0 4px 16px -6px rgba(16,24,40,.10)',pop:'0 8px 40px -8px rgba(16,24,40,.28)'}}}}</script>
+<!-- R24: supabase-js + chart.js are now PINNED npm deps bundled via src/vendor.js (no floating CDN code) -->
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
