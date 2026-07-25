@@ -17,7 +17,7 @@ function accessControlPage(){
     <button class="ui-tab${tab==='people'?' on':''}" onclick="S.filters.acTab='people';rr()">People <span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-2);margin-left:5px">${DB.users.filter(u=>u.status==='Active').length}</span></button>
     <button class="ui-tab${tab==='roles'?' on':''}" onclick="S.filters.acTab='roles';rr()">Roles <span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-2);margin-left:5px">${Object.keys(DB.roleProfiles||{}).length}</span></button>
   </div>`;
-  return `<div class="fade">${hdr('Access Control','Create roles → assign to people. Overrides handle the exceptions. Toggles also decide which Dashboard, People, Checklists and Administration sub-tabs a person sees.')}${tabs}${_howBar('accesscontrol')}${tab==='roles'?_acRolesTab():_acPeopleTab()}</div>`;
+  return `<div class="fade">${hdr('Access Control','Roles decide what each person can open and do')}${tabs}${tab==='roles'?_acRolesTab():_acPeopleTab()}</div>`;
 }
 /* ─────────────── PEOPLE TAB ─────────────── */
 function _acPeopleTab(){
@@ -131,7 +131,7 @@ App._renderACUser=()=>{
       ${_acTogBtn(!!(p.upload||p.edit||p.download),'Manage',`App._acDoc('${kind}','${id}','manage')`,dis)}
     </div>`;
   };
-  const docs=`<div style="${lab};margin:2px 0 4px">Document access <span style="text-transform:none;font-weight:600">(also unlocks the Departments / Locations tabs)</span></div>
+  const docs=`<div style="${lab};margin:2px 0 4px">Document access <span style="text-transform:none;font-weight:600">(also unlocks the Departments / Clients tabs)</span></div>
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);margin:2px 0 4px">Departments</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px 20px;margin-bottom:10px">
       ${(DB.departments||[]).map(dp=>docRow('departments',dp.id,dp.name)).join('')||'<span style="font-size:11px;color:var(--c-text-3)">No departments.</span>'}

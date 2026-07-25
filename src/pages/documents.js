@@ -59,7 +59,7 @@ function _locDocsTab(locId){
   const loc=locById(locId);
 
   const crumbs=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-    <button type="button" onclick="App._docFolder(null)" style="font-size:13px;font-weight:700;color:${fid?'var(--c-brand-ink)':'var(--c-text)'};background:none;border:none;cursor:pointer;padding:0">${esc((loc&&loc.name)||'Location')}</button>
+    <button type="button" onclick="App._docFolder(null)" style="font-size:13px;font-weight:700;color:${fid?'var(--c-brand-ink)':'var(--c-text)'};background:none;border:none;cursor:pointer;padding:0">${esc((loc&&loc.name)||'Client')}</button>
     ${trail.map((f,i)=>`<span style="color:var(--c-text-3)">›</span><button type="button" onclick="App._docFolder('${esc(f.id)}')" style="font-size:13px;font-weight:${i===trail.length-1?'800':'700'};color:${i===trail.length-1?'var(--c-text)':'var(--c-brand-ink)'};background:none;border:none;cursor:pointer;padding:0">${esc(f.name)}</button>`).join('')}
   </div>`;
 
@@ -71,7 +71,7 @@ function _locDocsTab(locId){
   </div>`:'';
 
   if(!folders.length&&!docs.length){
-    return crumbs+toolbar+empty('folder','Nothing here yet',canUp?'Create a folder or upload the first file for this location.':'No documents have been added for this location.');
+    return crumbs+toolbar+empty('folder','Nothing here yet',canUp?'Create a folder or upload the first file for this client.':'No documents have been added for this client.');
   }
 
   const folderGrid=folders.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px">
@@ -111,7 +111,7 @@ App._docFolder=(id)=>{S.filters.docFolder=id||null;rr();};
 
 /* ── create a folder ── */
 App._docNewFolder=(locId)=>{
-  if(!(can('locations','create')||can('locations','edit')||isAdmin()))return toast('You need Locations → Create or Edit','err');
+  if(!(can('locations','create')||can('locations','edit')||isAdmin()))return toast('You need Clients → Create or Edit','err');
   modalShell({title:'New folder',size:'max-w-sm',
     body:`<input id="doc-fname" class="ui-input rf" placeholder="Folder name" maxlength="80"/>`,
     footer:btnG('Cancel','App.closeModal()')+btnP('Create',`App._docNewFolderGo('${esc(locId)}')`)});
@@ -135,7 +135,7 @@ App._docUpload=async(locId,input)=>{
   const files=[...((input&&input.files)||[])];
   if(input)input.value='';
   if(!files.length)return;
-  if(!(can('locations','create')||can('locations','edit')||isAdmin()))return toast('You need Locations → Create or Edit','err');
+  if(!(can('locations','create')||can('locations','edit')||isAdmin()))return toast('You need Clients → Create or Edit','err');
   const folderId=S.filters.docFolder||null;
   let ok=0,failed=0;
   toast('Uploading '+files.length+' file'+(files.length===1?'':'s')+'…');
@@ -177,7 +177,7 @@ App._docDownload=async(docId)=>{
 
 /* ── delete ── */
 App._docDelete=(docId)=>{
-  if(!(can('locations','delete')||isAdmin()))return toast('You need Locations → Delete','err');
+  if(!(can('locations','delete')||isAdmin()))return toast('You need Clients → Delete','err');
   const d=(DB.tmDocuments||[]).find(x=>x.id===docId);if(!d)return;
   if(!confirm('Delete "'+d.name+'"? This cannot be undone.'))return;
   DB.tmDocuments=(DB.tmDocuments||[]).filter(x=>x.id!==docId);
@@ -187,7 +187,7 @@ App._docDelete=(docId)=>{
   saveDB();toast('File deleted','warn');rr();
 };
 App._docDelFolder=(folderId)=>{
-  if(!(can('locations','delete')||isAdmin()))return toast('You need Locations → Delete','err');
+  if(!(can('locations','delete')||isAdmin()))return toast('You need Clients → Delete','err');
   const f=(DB.tmFolders||[]).find(x=>x.id===folderId);if(!f)return;
   const ids=_folderSubtree(f.locationId,folderId);
   const docs=(DB.tmDocuments||[]).filter(d=>ids.includes(d.folderId));

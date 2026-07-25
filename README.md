@@ -59,6 +59,68 @@ the `locations` permission key are unchanged, so nothing moved in the database �
   directory has no client filter, because a person is no longer linked to one — they are linked
   to the checklists they work on.
 - Each client holds its own folders and documents under its Documents tab.
+- The **client form** asks client questions: name, contact person, reference / licence number,
+  contact email and phone, address, owning department, status and free-text notes. The contact
+  details live in a new `tm_client_meta` table — the shared `locations` row keeps exactly the five
+  columns it always had, so the full Evarca app sees no change.
+
+## Notifications
+
+`NOTIF_EVENTS` in `src/engine/notifications.js` is the whole list, and it is the only list. Settings
+renders its rows straight from it and every send site calls `notifyEvent(key, …)`. Add an event there
+and it appears in Settings with working switches; there is no second list to keep in step, and
+nothing can appear in Settings that doesn't actually fire.
+
+**Every event has both channels** — an in-app row on the bell and an email — each with its own
+switch. Email additionally needs the master *Email delivery* switch, which is off until an admin
+turns it on. The announcement pair is the one exception to where a switch is stored: it lives on the
+shared `hrm_notif_prefs` row the wider platform owns, marked `store:'hnp'`, and the readers hide that
+difference from every caller.
+
+The old "mute a whole feature" table is gone. Those master switches lived on the shared `hrm_config`
+row, so the other Evarca app could silently mute a notification nobody in this build could see or
+turn back on. Per-event switches are now the only authority here.
+
+Instructional filler is gone too — "Runs every day. To run it on particular days only, choose Weekly
+above" and its like. Daily simply means every day, and the editor no longer explains itself.
+
+## Feedback
+
+Yes, it works, and here is the whole path:
+
+1. A manager opens **Team**, picks someone, and presses **Send feedback**.
+2. They fill in a title, a comment, a type and a priority, and can attach it to a specific checklist.
+3. It is written to the `feedback` table and the person is notified (`feedback_received`).
+4. The employee sees it in **Inbox → Alerts → Feedback**, on their **Profile**, and inline on that
+   day's checklist card if it was attached to one.
+5. They **Acknowledge** it; the manager can reply, and replies thread on the same record.
+
+Feedback is about a person, not a run, which is why it is not on the dashboard.
+
+## Permissions
+
+`PERM_AREAS` in `src/perms.js` keeps the full platform list — role bundles live in the shared
+`workspace_settings` row, so an area this build doesn't ship still has to survive a save here. What
+the Access Control editor **renders** is `_tmAreas()`, which returns filtered *copies*:
+
+- `TM_AREAS` — the areas this build has pages for.
+- `TM_HIDDEN_ACTIONS` — actions nothing here checks (`employees.manageAssets` / `assign` / `manage`,
+  `checklists.assign`, `locations.manage`). A switch that changes nothing is worse than no switch. A
+  test walks every action still on offer and fails if it has no `can(area, action)` call site.
+- `TM_AREA_COPY` — this build's wording, so the editor stops describing HR features that aren't here.
+
+Hidden actions and hidden areas are copied through untouched on save, including by **All off**, so
+editing a role here never strips a permission the wider platform relies on. The "their office" scope
+is not offered either (people are no longer assigned to one), but a bundle that already stores it
+reads back unchanged.
+
+## One filter bar
+
+Checklists, All results, Team, Tickets, Clients, People, Questions and Audit all build their filter
+row from the same primitives in `src/ui/helpers.js` — `filterBar()`, `filterSearch()`,
+`filterSelect()`, `clientFilter()`, `filterClear()`, `filterCount()`. Same card, same padding, same
+34px control height on every page. A test asserts each of those pages calls `filterBar()` and none of
+them re-declares the row or the control size locally, so they can't drift apart again.
 
 ## What's not in it
 
@@ -79,7 +141,7 @@ instead of a blank page (`_RETIRED_ROUTES` in `src/ui/nav.js`).
 npm install       # install dependencies
 npm run dev       # local dev server
 npm run build     # production build into dist/
-npm test          # route sweep + reference audit + behaviour tests (168 assertions)
+npm test          # route sweep + reference audit + behaviour tests (194 assertions)
 ```
 
 ## Deploying
@@ -109,6 +171,7 @@ project (see `.env.example`).
 | `tm_answers` | one row per (checklist, date, question) — the answer, who submitted it, when, and whether it is locked |
 | `tm_answer_edits` | a request to change one submitted answer, and its decision |
 | `tm_checklist_meta` | the optional deadline **date** (the optional deadline time keeps living on `checklists.schedule_time`, which already means exactly that) |
+| `tm_client_meta` | a client's contact person, email, phone, reference number and notes |
 | `tm_folders` | folders under a location |
 | `tm_documents` | files under a location, pointing at the storage bucket |
 
@@ -137,14 +200,17 @@ These are the spots where this app touches state the wider platform also owns. E
 code, and each has a test.
 
 1. **`workspace_settings.role_profiles`** — the permission bundles. Access Control here renders only
-   the task-management areas (`TM_AREAS` in `src/perms.js`), but `PERM_AREAS` deliberately keeps the
-   full platform list, and saving a role copies through every toggle the editor never showed. Edit a
-   role here and its Payroll/Leave switches survive untouched.
+   the task-management areas and actions (`TM_AREAS` / `TM_HIDDEN_ACTIONS` in `src/perms.js`), but
+   `PERM_AREAS` deliberately keeps the full platform list, and saving a role copies through every
+   toggle the editor never showed — including **All off**. Edit a role here and its Payroll/Leave
+   switches, and `employees.manageAssets`, survive untouched.
 
-2. **`hrm_config`** — the notification switches live on this shared row. This app sends a targeted
-   `update` of the `extras` column only, round-tripping the fields it doesn't own (branding, alert
-   thresholds, flow and letter templates) verbatim. It also refuses to write at all until it has
-   successfully read the row, so a failed load can never overwrite live config with defaults.
+2. **`hrm_config`** — a shared config row. This build no longer keeps any notification switch here
+   (they are per-event now, on the workspace notification settings), but when it does write it sends
+   a targeted `update` of the `extras` column only, round-tripping the fields it doesn't own
+   (branding, alert thresholds, flow and letter templates) verbatim. It also refuses to write at all
+   until it has successfully read the row, so a failed load can never overwrite live config with
+   defaults.
 
 3. **`user_hrm`** — the per-user blob. The user editor here shows three directory fields (date of
    birth, joining date, office location); saving spreads the stored blob and overwrites only those,
@@ -166,8 +232,8 @@ Key modules:
 - `src/supabase.js` — boot loader `loadFromSB`, the debounced 1.5s `_sync()` batch, targeted
   `_pushRow`/`_delRow` writes, `_lazyLoad`/`_lazyCold` per-tab loaders, tombstone arrays
   (`*_deleted`) against resurrection, and the realtime channel.
-- `src/engine/notifications.js` — `notify()`, the per-feature in-app/email gates (`_inappOn`) and
-  the config seeds.
+- `src/engine/notifications.js` — `NOTIF_EVENTS` (the single list), `notifyEvent()` and the two
+  channel gates `evInApp()` / `evEmail()`. Everything that sends goes through here.
 - `src/engine/core.js` — the helpers the removed HR modules used to own: the in-app notification
   helper, the notification-preference store, the local activity log, the approval inbox model and a
   few formatters.
@@ -195,7 +261,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 168 assertions in four files:
+`npm test` runs 194 assertions in five files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every
@@ -212,6 +278,12 @@ hover. Theme lives in `src/ui/charts.js`.
   modal and the status dropdown, the Client rename and filters, the password eye, the Settings
   consolidation (including that a stale sub-tab link still lands somewhere real), and Daily
   meaning every day.
+- **`tests/round4.test.js`** — the client form and its new meta table (asserting the `locations` row
+  gained no columns), removing a deadline date without touching the time, every event carrying both
+  channels and honouring each switch independently, "Assigned to me" in All results, the permission
+  editor hiding only actions with no gate while a role save keeps them, no approval toggle on a
+  question but the column still round-tripping, and every list page rendering the one shared filter
+  bar.
 
 Both matter more than usual here, because cross-file references resolve through `window` at call
 time — `vite build` will happily build an app whose buttons throw when clicked.

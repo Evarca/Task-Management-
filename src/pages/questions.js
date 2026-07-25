@@ -254,14 +254,13 @@ function questionsPage(){
   // a profile with view-only now correctly hides the create/import controls.
   const canMng=can('questions','create'),canImp=can('questions','import'),canExp=can('questions','export');
   return`<div class="fade">${hdr('Questions','Reusable question library for your checklists',btn('Expand all','App._qExpandAll()',{variant:'ghost',size:'sm'})+btn('Collapse all','App._qCollapseAll()',{variant:'ghost',size:'sm'})+(canMng?btnP('New question','App._editQuestion(null)','plus'):''))}
-    <!-- ONE aligned action row: search + exports + CSV import -->
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-      <input id="qSearchInput" type="text" placeholder="Search questions…" value="${S.filters.qSearch||''}"
-        oninput="App._filterQuestions(this.value)"
-        class="ui-input rf" style="flex:1;min-width:180px"/>
-      ${allQ.length?btn('Download all','App._downloadAllQuestions()',{variant:'ghost',icon:'download'}):''}
-      ${canExp?btn('CSV template','App._downloadQTemplate()',{variant:'ghost',icon:'download'}):''}${canImp?`<label class="ui-btn ui-btn-brand" title="Fill the CSV template, then upload to add many questions at once" style="cursor:pointer">${ic('upload','w-4 h-4')} Upload CSV<input type="file" accept=".csv" onchange="App._importQCSV(this)" style="display:none"/></label>`:''}
-    </div>
+    <!-- ONE aligned action row: search + exports + CSV import — shared filter-bar shell -->
+    ${filterBar(
+       `<div style="position:relative;flex:1;min-width:170px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3);pointer-events:none">${ic('search','w-4 h-4')}</span><input id="qSearchInput" type="text" placeholder="Search questions…" value="${esc(S.filters.qSearch||'')}" oninput="App._filterQuestions(this.value)" class="ui-input rf" style="padding-left:34px;min-height:0;height:34px;font-size:13px"/></div>`
+      +(allQ.length?btn('Download all','App._downloadAllQuestions()',{variant:'ghost',size:'sm',icon:'download'}):'')
+      +(canExp?btn('CSV template','App._downloadQTemplate()',{variant:'ghost',size:'sm',icon:'download'}):'')
+      +(canImp?`<label class="ui-btn ui-btn-brand ui-btn-sm" title="Fill the CSV template, then upload to add many questions at once" style="cursor:pointer">${ic('upload','w-4 h-4')} Upload CSV<input type="file" accept=".csv" onchange="App._importQCSV(this)" style="display:none"/></label>`:'')
+      +filterCount(allQ.length+' question'+(allQ.length===1?'':'s')))}
     <div id="qResults">${(()=>{
       const filtered=S.filters.qSearch?allQ.filter(q=>q.text.toLowerCase().includes((S.filters.qSearch||'').toLowerCase())):allQ;
       return _renderQGrouped(filtered);
@@ -361,7 +360,7 @@ App._renderQModal=()=>{
   else if(q.type==='tick')prev=`<div style="display:flex;gap:8px"><div style="flex:1;padding:9px;border-radius:9px;background:#DCFCE7;color:#16A34A;display:flex;justify-content:center">${ic('check','w-[18px] h-[18px]')}</div><div style="flex:1;padding:9px;border-radius:9px;background:#FEE2E2;color:#DC2626;display:flex;justify-content:center">${ic('x','w-[18px] h-[18px]')}</div></div>`;
 
   const _qfl=(n,t)=>'<span style="display:inline-flex;align-items:center;gap:4px">'+ic(n,'w-3 h-3')+t+'</span>';
-  const flags=[q.photo?_qfl('cam','Photo required'):'',q.approval?_qfl('check','Approval needed'):'',q.comment?_qfl('msg','Comment required'):''].filter(Boolean);
+  const flags=[q.photo?_qfl('cam','Photo required'):'',q.comment?_qfl('msg','Comment required'):''].filter(Boolean);
 
   const togRow=(k,lbl,desc,iconName='')=>`<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${_QED[k]?'#BBF7D0':'#F3F4F6'};background:${_QED[k]?'#F0FDF4':'#FAFAFA'};cursor:pointer;margin-bottom:5px">
     <div><div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600">${iconName?ic(iconName,'w-3.5 h-3.5'):''}${lbl}</div><div style="font-size:11px;color:#9CA3AF">${desc}</div></div>
@@ -410,7 +409,6 @@ App._renderQModal=()=>{
         <label style="${_lbl}">Options</label>
         ${togRow('isPublic','Public question','Off = Private (default): only you and assigned users see it. On: everyone with Questions access sees it','globe')}
         ${togRow('photo','Photo mandatory','Upload button always shown — this makes it required','cam')}
-        ${togRow('approval','Approval required','Response needs manager approval','check')}
         ${togRow('comment','Comment mandatory','Comment box always shown — this makes it required','msg')}
       </div>
       <div style="background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:var(--r-md);padding:14px">      <div style="background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:var(--r-md);padding:14px">
@@ -781,7 +779,7 @@ function _processEscalations(checklistId,date,responses){
       );
       if(existingOpenTicket){
         // Just update the notification so assignee knows it happened again
-        if(_inappOn('escalation'))DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:'🔁 Repeat escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" again by '+fullName(u)+' — ticket #'+existingOpenTicket.id.slice(-6)+' still open',time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
+        notifyEvent('escalation',escalateTo,'🔁 Repeat escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" again by '+fullName(u)+' — ticket #'+existingOpenTicket.id.slice(-6)+' still open','tickets',{question:q.text,answer:String(resp.response||''),submitter:fullName(u)});
         _invalidateNotifCache();
         return; // Skip creating a duplicate ticket
       }
@@ -830,10 +828,10 @@ function _processEscalations(checklistId,date,responses){
         else console.log('[ticket]',ticket.id,'inserted for',ticket.assignedTo);
       }).catch(e=>console.error('[ticket insert failed]',e.message));
       // In-app notification to assignee
-      if(_inappOn('escalation'))DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
+      notifyEvent('escalation',escalateTo,escMsg,'tickets',{question:q.text,answer:String(resp.response||''),submitter:fullName(u)});
       // In-app notification to admin
       const adminU=DB.users.find(x=>isSuperU(x));
-      if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid&&_inappOn('escalation')){
+      if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid){
         DB.notifications.unshift({id:uid('n'),userId:adminU.id,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
       }
       // Email the escalation target

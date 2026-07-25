@@ -177,6 +177,28 @@ const clientIdsOf=c=>(((c&&c.locationIds)||[]).slice());
 const clientIdsOfTicket=t=>{const c=(t&&t.checklistId)?clById(t.checklistId):null;return c?clientIdsOf(c):[];};
 /* True when the record belongs to the selected client (empty selection = no filtering). */
 const matchesClient=(ids,sel)=>!sel||(ids||[]).includes(sel);
+/* ── ONE FILTER BAR, EVERY LIST PAGE ──
+   Checklists, All results, Team, Tickets, Clients, People, Questions and Audit all render their
+   filter row through these. Same card, same padding, same control height everywhere, so no page
+   drifts on its own the next time one of them is edited. A test asserts every list page uses
+   FILTER_BAR_ST rather than hand-rolling the row. */
+const FILTER_BAR_ST='display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px';
+const FILTER_SEL_ST='font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto';
+const filterBar=inner=>`<div class="ui-card" style="${FILTER_BAR_ST}">${inner}</div>`;
+const filterLabel=t=>`<span style="font-size:11.5px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">${esc(t||'Filter')}</span>`;
+/* Search box for a filter bar. `filterKey` is the S.filters key it writes; the debounced re-render
+   keeps the caret where the user left it (App._searchRR). */
+const filterSearch=(id,filterKey,placeholder)=>`<div style="position:relative;flex:1;min-width:170px">
+    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3);pointer-events:none">${ic('search','w-4 h-4')}</span>
+    <input id="${esc(id)}" value="${esc((S.filters||{})[filterKey]||'')}" oninput="S.filters.${filterKey}=this.value;App._searchRR('${esc(id)}')" placeholder="${esc(placeholder||'Search…')}" class="ui-input" style="padding-left:34px;min-height:0;height:34px;font-size:13px"/>
+  </div>`;
+const filterSelect=(filterKey,allLabel,opts,cur)=>`<select onchange="S.filters.${filterKey}=this.value;rr()" class="ui-select" style="${FILTER_SEL_ST}" aria-label="${esc(allLabel)}">
+    <option value="">${esc(allLabel)}</option>
+    ${(opts||[]).map(o=>{const v=(o&&o.value!==undefined)?o.value:o,l=(o&&o.label!==undefined)?o.label:o;return `<option value="${esc(v)}" ${String(cur||'')===String(v)?'selected':''}>${esc(l)}</option>`;}).join('')}
+  </select>`;
+const filterClear=keys=>`<button onclick="[${(keys||[]).map(k=>"'"+k+"'").join(',')}].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`;
+const filterCount=text=>`<span style="font-size:11.5px;color:var(--c-text-3);font-weight:600;margin-left:auto">${esc(text)}</span>`;
+
 /* One consistent Client <select> for every filter bar. */
 function clientFilter(filterKey,style){
   const opts=(DB.locations||[]).filter(l=>l.status!=='Inactive').sort((a,b)=>String(a.name).localeCompare(String(b.name)));
@@ -353,22 +375,6 @@ App._howModal=()=>{
       ${h.l&&h.l.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center"><span style="font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase">Linked tabs:</span>${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.closeModal();App.go('${x[0]}')" class="ui-btn ui-btn-ghost ui-btn-sm">${x[1]} →</button>`).join('')}</div>`:''}`,
     footer:btnP('Got it','App.closeModal()')});
 };
-function _howBar(key){
-  const h=HOW[key];if(!h)return'';
-  try{if(localStorage.getItem('bridge_how_'+key))return'';}catch(e){}
-  return `<div style="display:flex;gap:10px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #BFDBFE;border-radius:12px;padding:10px 14px;margin-bottom:14px">
-    <span style="flex-shrink:0;margin-top:1px">${ic('help','w-4 h-4')}</span>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:12.5px;color:#1E40AF;line-height:1.55">${h.t}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
-        <span style="font-size:10px;font-weight:800;color:#1E40AF;text-transform:uppercase;letter-spacing:.05em">Linked:</span>
-        ${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.go('${x[0]}')" class="how-chip" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;border:1px solid #BFDBFE;background:var(--c-surface);color:#1E40AF;cursor:pointer">${x[1]} →</button>`).join('')}
-      </div>
-    </div>
-    <button onclick="try{localStorage.setItem('bridge_how_${key}','1')}catch(e){};rr()" title="Got it — hide" aria-label="Hide this tip" class="how-x" style="border:none;background:transparent;color:#1E40AF;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0">×</button>
-  </div>`;
-}
-
 /* ════════ REFERENTIAL-INTEGRITY DELETE GUARDS ════════
    guardDelete(type,id,label) → true when the record has no LIVE links and deletion may proceed.
    Otherwise it opens a modal naming every link (grouped, first 5 names + count) and returns false.
@@ -483,7 +489,7 @@ App._togPw=(id,btn)=>{
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window._draftStrip=_draftStrip;window._draftFor=_draftFor;window._draftSave=_draftSave;window._draftDelete=_draftDelete;
 window._refLinks=_refLinks;window.guardDelete=guardDelete;
-window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.fldPw=fldPw;window.selF=selF;window.mkTog=mkTog;window.card=card;window.clientsOf=clientsOf;window.clientIdsOf=clientIdsOf;window.clientIdsOfTicket=clientIdsOfTicket;window.matchesClient=matchesClient;window.clientFilter=clientFilter;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;window._howBar=_howBar;
+window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.fldPw=fldPw;window.selF=selF;window.mkTog=mkTog;window.card=card;window.clientsOf=clientsOf;window.clientIdsOf=clientIdsOf;window.clientIdsOfTicket=clientIdsOfTicket;window.matchesClient=matchesClient;window.clientFilter=clientFilter;window.FILTER_BAR_ST=FILTER_BAR_ST;window.FILTER_SEL_ST=FILTER_SEL_ST;window.filterBar=filterBar;window.filterLabel=filterLabel;window.filterSearch=filterSearch;window.filterSelect=filterSelect;window.filterClear=filterClear;window.filterCount=filterCount;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;
 
 /* Human hours: 2.83 → "2h 50m" (decimals confuse people; CSV exports keep the numbers). */
 function fmtH(h){h=Number(h)||0;const neg=h<0?'-':'';h=Math.abs(h);let H=Math.floor(h),M=Math.round((h-H)*60);if(M===60){H++;M=0;}return neg+H+'h'+(M?' '+M+'m':'');}

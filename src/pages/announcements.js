@@ -49,7 +49,7 @@ function announcementsPage(){
     ? empty('msg',all.length?'No matches':'No announcements yet',all.length?'Try a different search.':'Company announcements will appear here.')
     : `<div style="display:flex;flex-direction:column;gap:10px">${list.map(a=>{
         const rd=_annIsRead(a.id);
-        const tgt=[a.deptTarget?esc(a.deptTarget):'',a.locTarget?esc(locById(a.locTarget)?.name||'(deleted location)'):''].filter(Boolean).join(' · ')||'Everyone';
+        const tgt=[a.deptTarget?esc(a.deptTarget):'',a.locTarget?esc(locById(a.locTarget)?.name||'(deleted client)'):''].filter(Boolean).join(' · ')||'Everyone';
         return`<div onclick="App._readAnnouncement('${a.id}')" style="cursor:pointer;background:var(--c-surface);border:1px solid ${rd?'var(--c-border)':'var(--c-brand)'};box-shadow:var(--sh-sm);border-radius:var(--r-md);padding:14px 16px;position:relative" onmouseover="this.style.borderColor='var(--c-brand)'" onmouseout="this.style.borderColor='${rd?'var(--c-border)':'var(--c-brand)'}'">
           ${rd?'':'<span style="position:absolute;top:14px;right:14px;width:9px;height:9px;border-radius:50%;background:var(--c-brand)"></span>'}
           <div class="fd" style="font-size:15px;font-weight:700;color:var(--c-text);padding-right:18px">${esc(a.title)}</div>
@@ -69,7 +69,7 @@ App._readAnnouncement=(id,fromBanner)=>{
   const a=(DB.announcements||[]).find(x=>x.id===id);if(!a)return;
   const u=me();
   if(u){if(!Array.isArray(u.hrm.announcementsRead))u.hrm.announcementsRead=[];if(!u.hrm.announcementsRead.includes(id)){u.hrm.announcementsRead.push(id);saveDB();}}
-  const tgtRaw=[a.deptTarget||'',a.locTarget?(locById(a.locTarget)?.name||'(deleted location)'):''].filter(Boolean).join(' · ')||'Everyone';
+  const tgtRaw=[a.deptTarget||'',a.locTarget?(locById(a.locTarget)?.name||'(deleted client)'):''].filter(Boolean).join(' · ')||'Everyone';
   modalShell({title:a.title,sub:'Announcement · '+tgtRaw,size:'max-w-lg',
     body:`<div style="font-size:12px;color:var(--c-text-3);margin-bottom:14px">${esc(fullName(uById(a.createdBy))||'HR')} · ${esc(_annDate(a.createdAt))}</div>
     <div style="font-size:14px;color:var(--c-text);white-space:pre-wrap;line-height:1.6">${esc(a.body||'')}</div>`,
@@ -119,10 +119,7 @@ App.postAnnouncement=()=>{
      Notify every targeted recipient: in-app (gated by inapp_announcement) + email
      (gated by email_announcement AND the hrm_email_enabled master switch via _hnpEmail).
      queueEmail is the SINGLE place real sending connects — no backend network call added here. */
-  recipients.forEach(u=>{
-    if(_hnp('inapp_announcement'))_hrmNotify(u.id,'📣 '+title,'announcement');
-    if(_hnpEmail('email_announcement'))queueEmail('announcement',u.id,null,null,{title,body});
-  });
+  recipients.forEach(u=>notifyEvent('announcement',u.id,'📣 '+title,'announcements',{title,body}));
   saveDB();
   closeModal();
   toast('Announcement posted to '+recipients.length+' '+(recipients.length===1?'person':'people'));

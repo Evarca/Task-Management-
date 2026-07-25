@@ -118,18 +118,15 @@ function ticketsPage(){
     '</div>'+
     // R12 Filters: search · assignee · priority · sort (+ Clear), status pills below (one-line scroll)
     (()=>{
-      const _selSt='font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto';
       const _people=[...new Set(base.map(t=>t.assignedTo).filter(Boolean))].map(id=>uById(id)).filter(Boolean).sort((a,b)=>fullName(a).localeCompare(fullName(b)));
       const _active=!!(f.tkQ||statusFilter||priorityFilter||f.tkAssignee||f.tkSort||f.tkClient);
-      return '<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:10px">'+
-        '<div style="position:relative;flex:1;min-width:170px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3)">'+ic('search','w-4 h-4')+'</span>'+
-        `<input id="tk-q" value="${esc(f.tkQ||'')}" oninput="S.filters.tkQ=this.value;App._searchRR('tk-q')" placeholder="Search title, description, people…" class="ui-input" style="padding:6px 10px 6px 32px;min-height:34px;font-size:12.5px"/></div>`+
-        `<select onchange="S.filters.tkAssignee=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">All assignees</option>${_people.map(p=>`<option value="${p.id}" ${f.tkAssignee===p.id?'selected':''}>${esc(fullName(p))}</option>`).join('')}</select>`+
-        clientFilter('tkClient',_selSt)+
-        `<select onchange="App._tkFilter('priority',this.value)" class="ui-select" style="${_selSt}"><option value="">Any priority</option>${['Critical','High','Medium','Low'].map(p=>`<option ${priorityFilter===p?'selected':''}>${p}</option>`).join('')}</select>`+
-        `<select onchange="S.filters.tkSort=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">Newest first</option><option value="old" ${f.tkSort==='old'?'selected':''}>Oldest first</option><option value="pri" ${f.tkSort==='pri'?'selected':''}>By priority</option></select>`+
-        (_active?`<button onclick="['tkQ','tkStatus','tkPriority','tkAssignee','tkSort','tkClient'].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:'')+
-      '</div>'+
+      return filterBar(
+         filterSearch('tk-q','tkQ','Search title, description, people…')
+        +filterSelect('tkAssignee','All assignees',_people.map(p=>({value:p.id,label:fullName(p)})),f.tkAssignee)
+        +clientFilter('tkClient',FILTER_SEL_ST)
+        +`<select onchange="App._tkFilter('priority',this.value)" class="ui-select" style="${FILTER_SEL_ST}" aria-label="Any priority"><option value="">Any priority</option>${['Critical','High','Medium','Low'].map(p=>`<option ${priorityFilter===p?'selected':''}>${p}</option>`).join('')}</select>`
+        +`<select onchange="S.filters.tkSort=this.value;rr()" class="ui-select" style="${FILTER_SEL_ST}" aria-label="Sort tickets"><option value="">Newest first</option><option value="old" ${f.tkSort==='old'?'selected':''}>Oldest first</option><option value="pri" ${f.tkSort==='pri'?'selected':''}>By priority</option></select>`
+        +(_active?filterClear(['tkQ','tkStatus','tkPriority','tkAssignee','tkSort','tkClient']):''))+
       '<div class="hscroll" style="gap:8px;margin-bottom:16px;align-items:center">'+
         ['','Open','In Progress','Resolved','Closed'].map(s=>{const on=statusFilter===s;return`<button type="button" class="ui-tab-pill${on?' on':''}" style="flex-shrink:0" onclick="App._tkFilter('status','${s}')">${s||'All'}</button>`;}).join('')+
         `<span style="flex-shrink:0;font-size:11.5px;color:var(--c-text-3);font-weight:600;margin-left:4px">${tickets.length} ticket${tickets.length===1?'':'s'}</span>`+
@@ -221,8 +218,7 @@ App.createTicket=()=>{
   // Mirror the existing escalation insert columns exactly (no `route` column → schema-safe).
   sb.from('tickets').insert({id:ticket.id,title:ticket.title,description:ticket.description,priority:ticket.priority,status:ticket.status,assigned_to:ticket.assignedTo,created_by:ticket.createdBy,checklist_id:null,question_id:null,question_text:'',answer_given:'',submitter_id:ticket.submitterId,date:ticket.date,created_at:ticket.createdAt,resolved_at:null,resolve_note:'',viewed_by:[]})
     .then(({error})=>{if(error)console.error('[ticket insert]',error.message);}).catch(e=>console.error('[ticket insert failed]',e.message));
-  _hrmNotify(assignee,'🎫 New ticket from '+fullName(me())+': '+title,'ticket');
-  _invalidateNotifCache();
+  notifyEvent('ticket_assigned',assignee,'🎫 New ticket from '+fullName(me())+': '+title,'tickets',{ticket_title:title});
   saveDB();
   App.closeModal();
   toast('Ticket sent to '+(route==='manager'?'your manager':'HR')+'');
@@ -269,8 +265,7 @@ function _tkNotifyOutcome(t,status,note){
   const txt=(status==='Resolved')?'✅ Resolved: "'+title+'"'+(note?' — '+String(note).slice(0,60):'')
     :(status==='Closed')?'📕 Closed: "'+title+'"'
     :'🔄 Reopened: "'+title+'"';
-  who.forEach(id=>_hrmNotify(id,txt+' · by '+fullName(me()),'ticket','tickets'));
-  _invalidateNotifCache();
+  notifyEventAll('ticket_resolved',who,txt+' · by '+fullName(me()),'tickets',{ticket_title:title});
 }
 
 App._confirmResolve=(id)=>{

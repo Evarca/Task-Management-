@@ -43,7 +43,7 @@ window.DB={
   //    tmMeta         per-checklist extras this build adds (the optional deadline date)
   tmAnswers:[],tmAnswerEdits:[],tmMeta:{},
   // ── Location documents (new tm_folders / tm_documents tables) ──
-  tmFolders:[],tmDocuments:[]
+  tmFolders:[],tmDocuments:[],tmClientMeta:{}
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -111,6 +111,7 @@ function loadDB(){
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
     ['users','departments','locations','checklists','submissions','approvals','feedback','audit','notifications','questions','checklists_deleted','questions_deleted','users_deleted','departments_deleted','locations_deleted','hrmAudit','announcements','tmAnswers','tmAnswerEdits','tmFolders','tmDocuments'].forEach(k=>{if(!DB[k])DB[k]=[];});
     if(!DB.tmMeta||typeof DB.tmMeta!=='object')DB.tmMeta={};
+    if(!DB.tmClientMeta||typeof DB.tmClientMeta!=='object')DB.tmClientMeta={};
     // OKR v2 migration: drop the retired question-linked OKR model from stale localStorage.
     // Old rows are recognisable by having no metricType (they carried questionId/rollup instead).
     DB.okrs=(DB.okrs||[]).filter(o=>o&&o.metricType);

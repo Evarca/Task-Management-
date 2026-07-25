@@ -157,14 +157,14 @@ async function _runDeadlineChecks(){
         _dlSent[key]=Date.now();changed=true;
         const mgr=uById(mgrId);
         // Email (sendEmail respects the global toggle, per-event toggle and the recipient's opt-out).
-        if(mgr&&mgr.emailEnabled!==false)sendEmail('submission_late',mgrId,{checklist_name:c.name,employee_name:fullName(emp)});
-        // In-app notification for the manager (deterministic id → idempotent upsert; respects in-app toggle).
-        if(_inappOn('checklist')&&(!_ns||_ns.inapp_submission_late!==false)){
+        // Deterministic id → idempotent upsert, so the same overdue day never alerts twice.
+        if(evEmail('submission_late'))sendEmail('submission_late',mgrId,{checklist_name:c.name,employee_name:fullName(emp)});
+        if(evInApp('submission_late')){
           const nid='dlm_'+today.replace(/-/g,'')+'_'+c.id+'_'+aid;
-          const txt='⏰ Overdue: '+fullName(emp)+' has not submitted "'+c.name+'" (due '+c.scheduleTime+')';
+          const txt='⏰ Overdue: '+fullName(emp)+' has not submitted "'+c.name+'"'+(c.scheduleTime?' (due '+c.scheduleTime+')':'');
           const t=new Date().toISOString();
-          sb.from('notifications').upsert({id:nid,user_id:mgrId,text:txt,read:false,created_at:t,kind:'submission_late',target_route:'teamview'},{onConflict:'id'}).then(()=>{},()=>{});
-          if(mgrId===S.uid)DB.notifications.unshift({id:nid,userId:mgrId,text:txt,read:false,time:t,kind:'submission_late',targetRoute:'teamview'});
+          sb.from('notifications').upsert({id:nid,user_id:mgrId,text:txt,read:false,created_at:t,kind:'submission',target_route:'teamview'},{onConflict:'id'}).then(()=>{},()=>{});
+          if(mgrId===S.uid)DB.notifications.unshift({id:nid,userId:mgrId,text:txt,read:false,time:t,kind:'submission',targetRoute:'teamview'});
         }
       });
     });

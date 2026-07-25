@@ -417,6 +417,7 @@ async function loadFromSB(){
 
   // ── Location folders + documents (new tm_ tables). ──
   _docsLoad().then(()=>{saveDB();rr();}).catch(()=>{});
+  _clientMetaLoad().then(()=>{saveDB();rr();}).catch(()=>{});
 
   // ── Announcements + personal drafts (defensive targeted-load pattern: a missing or
   //    RLS-locked table logs a warning and leaves the local array as-is). ──
@@ -521,14 +522,14 @@ async function _sync(){try{
       const ps=[];if(ins.length)ps.push(_safeUp('feedback',_dedupeById(ins.map(_fbRow)),{onConflict:'id'}));
       updOnly.forEach(fb=>ps.push(sb.from('feedback').update(_fbRow(fb)).eq('id',fb.id)));
       return _syncMerge(ps);})(),
-    _safeUp('questions',(can('questions','manage')?(DB.questions||[]):[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,department:q.department||'',sub_department:q.subDepartment||'',created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
+    _safeUp('questions',((can('questions','create')||can('questions','edit')||can('questions','delete')||can('questions','import'))?(DB.questions||[]):[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,department:q.department||'',sub_department:q.subDepartment||'',created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
     /* PHASE3-FIX: RLS tk_i (INSERT) = created_by|manage|elevated, tk_u (UPDATE) adds assigned_to. An
        upsert must pass the INSERT check even for existing rows, so an assignee-only row 403s the whole
        batch (and submitter-only rows are not writable at all). Split: insertable rows upsert; rows the
        user can only UPDATE (assigned to them) go as per-row updates; submitter-only rows are skipped. */
     (()=>{if(!DB.tickets||!DB.tickets.length)return Promise.resolve({});
       const _tRow=t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]});
-      const canIns=t=>t.createdBy===S.uid||can('tickets','manage')||isAdmin();
+      const canIns=t=>t.createdBy===S.uid||can('tickets','changeStatus')||can('tickets','resolve')||can('tickets','delete')||isAdmin();
       const ins=DB.tickets.filter(canIns);
       const updOnly=DB.tickets.filter(t=>!canIns(t)&&t.assignedTo===S.uid);
       const ps=[];if(ins.length)ps.push(_safeUp('tickets',_dedupeById(ins.map(_tRow)),{onConflict:'id'}));

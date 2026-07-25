@@ -26,7 +26,9 @@ function hlog(action,target){
    batched notifications upsert and blocks ALL notification sync. */
 function _hrmNotify(userId,text,kind,targetRoute){
   if(!userId||!text)return;
-  if(!_inappOn(kind))return; // feature-level in-app switch (Settings → Notifications)
+  /* No feature-level gate: the per-event switches in Settings are the only authority, and
+     notifyEvent() is the route every real event takes. This stays for the few internal rows
+     that aren't user-configurable events (e.g. an access change ping). */
   const n={id:uid('n'),userId,text,time:new Date().toISOString(),read:false};
   if(kind)n.kind=kind;
   if(targetRoute)n.targetRoute=targetRoute;

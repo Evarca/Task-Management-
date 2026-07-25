@@ -94,6 +94,8 @@ const EMAIL_EVENTS=[
   {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'escalation',       label:'Escalation raised',    vars:'{{submitter}}, {{checklist_name}}, {{question}}, {{answer}}, {{action_url}}'},
   {key:'announcement',     label:'Announcement',         vars:'{{title}}, {{body}}, {{action_url}}'},
+  {key:'ticket_assigned',  label:'Ticket assigned',      vars:'{{user_name}}, {{ticket_title}}, {{action_url}}'},
+  {key:'ticket_resolved',  label:'Ticket resolved',      vars:'{{user_name}}, {{ticket_title}}, {{action_url}}'},
 ];
 
 function _defaultTemplates(){
@@ -108,6 +110,8 @@ function _defaultTemplates(){
     deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon. Please complete it before the cutoff.\n\n{{action_url}}'},
     escalation:{subject:'⚠️ Escalation: {{checklist_name}}',                    body:'An escalation was raised on {{checklist_name}}.\n\nQuestion: {{question}}\nAnswer: {{answer}}\nRaised by: {{submitter}}\n\nOpen Evarca to follow up.\n\n{{action_url}}'},
     announcement:{subject:'📣 {{title}}',                                       body:'{{body}}\n\n{{action_url}}'},
+    ticket_assigned:{subject:'🎫 Ticket assigned to you: {{ticket_title}}',    body:'Hi {{user_name}},\n\nA ticket has been assigned to you: {{ticket_title}}\n\n{{action_url}}'},
+    ticket_resolved:{subject:'✅ Ticket resolved: {{ticket_title}}',           body:'Hi {{user_name}},\n\nThe ticket you raised has been resolved: {{ticket_title}}\n\n{{action_url}}'},
   };
 }
 
@@ -116,11 +120,11 @@ function _nsDefault(){return{
   inapp_checklist_assigned:true,inapp_submission_submitted:true,
   inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
   inapp_approval_requested:true,inapp_approval_decided:true,
-  inapp_feedback_received:true,inapp_deadline_reminder:true,
+  inapp_feedback_received:true,inapp_deadline_reminder:true,inapp_escalation:true,inapp_ticket_assigned:true,inapp_ticket_resolved:true,
   email_checklist_assigned:true,email_submission_submitted:false,
   email_submission_late:true,email_submission_approved:true,email_submission_rejected:true,
   email_approval_requested:true,email_approval_decided:true,
-  email_feedback_received:false,email_deadline_reminder:true,email_escalation:true,
+  email_feedback_received:false,email_deadline_reminder:true,email_escalation:true,email_ticket_assigned:true,email_ticket_resolved:true,
   templates:{},
 };}
 window._ns=null;
@@ -208,6 +212,7 @@ async function sendEmail(eventType, userId, vars){
     submission_rejected:'mychecklists', approval_requested:'approvals',
     approval_decided:'mychecklists', /* employee-facing: their submission result lives in My Checklists */ feedback_received:'notifications',
     deadline_reminder:'mychecklists', escalation:'tickets', announcement:'announcements',
+    ticket_assigned:'tickets', ticket_resolved:'tickets',
   };
   const actionUrl = appUrl + '/#' + (routeMap[eventType]||'');
   const allVars = {user_name:fullName(user), from_name:_ns.email_from_name||'Evarca', app_url:appUrl, action_url:actionUrl, ...vars};
@@ -291,64 +296,24 @@ function settingsPage(){
   const tabBar=`<div class="ui-tabs" style="margin-bottom:20px">${TABS.map(([k,ll])=>`<button class="ui-tab${stab===k?' on':''}" onclick="App._setSTab('${k}')">${ll}</button>`).join('')}</div>`;
 
   /* ── NOTIFICATIONS ──
-     There used to be three tabs here — one listing every event for in-app, one listing the SAME
-     events again for email, and a third listing per-feature switches for both channels. Every
-     switch appeared twice under a different heading. It is one table now: a row per event, a
-     column per channel, so where a setting lives is obvious and nothing is duplicated.
-
-     Two stores sit behind it and that is invisible on purpose: most events ride the synced
-     workspace notification settings (_ns), while the announcement row rides DB.hrmNotifPrefs
-     — a shared row this build must not reshape. The matrix reads and writes whichever one
-     owns the key. */
-  const EVENTS=[
-    {group:'Checklists',rows:[
-      ['checklist_assigned','Checklist assigned','The person it was assigned to'],
-      ['submission_submitted','Checklist submitted','Their manager',{email:false}],
-      ['submission_late','Submitted late','Their manager'],
-      ['deadline_reminder','Deadline approaching','The person who owes it'],
-    ]},
-    {group:'Approvals',rows:[
-      ['approval_requested','Approval needed','Whoever can decide it'],
-      ['approval_decided','Approval decided','The person who asked'],
-      ['submission_approved','Submission approved','The person who submitted'],
-      ['submission_rejected','Submission rejected','The person who submitted'],
-    ]},
-    {group:'Everything else',rows:[
-      ['feedback_received','Feedback received','The person it is about'],
-      ['escalation','Escalation raised','Whoever it escalates to',{inapp:false}],
-      ['announcement','Announcement posted','Everyone it targets',{store:'hnp'}],
-    ]},
-  ];
-  const _evOn=(key,ch)=>{
-    const st=(EVENTS.flatMap(g=>g.rows).find(r=>r[0]===key)||[])[3]||{};
-    if(st.store==='hnp')return ch==='inapp'?_hnp('inapp_announcement'):_hnp('email_announcement');
-    return ns[ch+'_'+key]!==false;
-  };
-  const _evCell=(key,ch,avail)=>{
-    if(avail===false)return '<span style="display:inline-block;width:34px;text-align:center;color:var(--c-text-3);font-size:12px" title="This event has no '+ch+' delivery">—</span>';
-    const st=(EVENTS.flatMap(g=>g.rows).find(r=>r[0]===key)||[])[3]||{};
-    const on=_evOn(key,ch);
-    const call=st.store==='hnp'
+     Rendered straight from NOTIF_EVENTS (engine/notifications.js), which is also what every
+     send site keys off. Add an event there and it shows up here with working switches — there
+     is no second list to keep in step, and nothing can appear here that does not actually fire. */
+  const emailOn=ns.email_enabled!==false;
+  const _evCell=(key,ch)=>{
+    const e=_evByKey(key)||{};
+    const on=ch==='inapp'?evInApp(key):(e.store==='hnp'?_hnp('email_announcement'):ns['email_'+key]!==false);
+    const call=e.store==='hnp'
       ? `App._hnpTog(this,'${ch==='inapp'?'inapp_announcement':'email_announcement'}')`
       : `App._nsTog(this,'${ch}_${key}')`;
-    return `<button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(key)} ${ch}" class="tog ${on?'on':'off'}" onclick="${call}"><span></span></button>`;
-  };
-  const emailOn=ns.email_enabled!==false;
-  const _feat=(kind,label)=>{
-    const inOn=((DB.hrmConfig&&DB.hrmConfig.inappKinds)||{})[kind]!==false;
-    const emOn=((DB.hrmConfig&&DB.hrmConfig.emailKinds)||{})[kind]!==false;
-    return `<tr style="border-top:1px solid #F5F4F0">
-      <td style="padding:10px 20px"><div style="font-size:13px;font-weight:600;color:#15171C">${esc(label)}</div></td>
-      <td style="padding:10px 8px;text-align:center"><button role="switch" aria-checked="${inOn?'true':'false'}" aria-label="${esc(label)} in-app" class="tog ${inOn?'on':'off'}" onclick="App._kindTog(this,'inappKinds','${kind}')"><span></span></button></td>
-      <td style="padding:10px 20px 10px 8px;text-align:center"><button role="switch" aria-checked="${emOn?'true':'false'}" aria-label="${esc(label)} email" class="tog ${emOn?'on':'off'}" onclick="App._kindTog(this,'emailKinds','${kind}')"><span></span></button></td>
-    </tr>`;
+    return `<button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(e.label||key)} ${ch}" class="tog ${on?'on':'off'}" onclick="${call}"><span></span></button>`;
   };
   const notifTab=`<div class="space-y-4">
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
       <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
-          <div style="font-size:14px;font-weight:700">What gets sent, and how</div>
-          <div style="font-size:12px;color:#9CA3AF;margin-top:2px">One row per event. <strong>In-app</strong> is the bell; <strong>Email</strong> goes to the address on the person's account.</div>
+          <div style="font-size:14px;font-weight:700">Notifications</div>
+          <div style="font-size:12px;color:#9CA3AF;margin-top:2px">In-app is the bell. Email goes to the address on the person's account.</div>
         </div>
         <label style="display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#374151">Email delivery
           <button role="switch" aria-checked="${emailOn?'true':'false'}" aria-label="Email delivery master switch" class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
@@ -357,42 +322,26 @@ function settingsPage(){
       <table style="width:100%;border-collapse:collapse">
         <thead><tr style="background:#FCFCFB">
           <th style="text-align:left;padding:8px 20px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Event</th>
-          <th style="width:90px;padding:8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">In-app</th>
-          <th style="width:90px;padding:8px 20px 8px 8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Email</th>
+          <th style="width:88px;padding:8px;text-align:center;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">In-app</th>
+          <th style="width:88px;padding:8px 20px 8px 8px;text-align:center;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Email</th>
         </tr></thead>
         <tbody>
-        ${EVENTS.map(g=>`
-          <tr><td colspan="3" style="padding:11px 20px 4px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em;background:#FCFCFB">${esc(g.group)}</td></tr>
-          ${g.rows.map(([key,label,who,st])=>`<tr style="border-top:1px solid #F5F4F0">
-            <td style="padding:10px 20px"><div style="font-size:13px;font-weight:600;color:#15171C">${esc(label)}</div><div style="font-size:11px;color:#B8B5AC;margin-top:1px">Goes to: ${esc(who)}</div></td>
-            <td style="padding:10px 8px;text-align:center">${_evCell(key,'inapp',!(st&&st.inapp===false))}</td>
-            <td style="padding:10px 20px 10px 8px;text-align:center">${_evCell(key,'email',!(st&&st.email===false))}</td>
+        ${NOTIF_GROUPS.map(g=>`
+          <tr><td colspan="3" style="padding:11px 20px 4px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em;background:#FCFCFB">${esc(g)}</td></tr>
+          ${NOTIF_EVENTS.filter(e=>e.group===g).map(e=>`<tr style="border-top:1px solid #F5F4F0">
+            <td style="padding:10px 20px"><div style="font-size:13px;font-weight:600;color:#15171C">${esc(e.label)}</div><div style="font-size:11px;color:#B8B5AC;margin-top:1px">Goes to: ${esc(e.who)}</div></td>
+            <td style="padding:10px 8px;text-align:center">${_evCell(e.key,'inapp')}</td>
+            <td style="padding:10px 20px 10px 8px;text-align:center">${_evCell(e.key,'email')}</td>
           </tr>`).join('')}
         `).join('')}
         </tbody>
-      </table>
-      ${!emailOn?`<div style="padding:11px 20px;background:#FFFBEB;border-top:1px solid #FDE68A;font-size:12px;color:#92400E">Email delivery is off, so the Email column is ignored until you switch it back on.</div>`:''}
-    </div>
-
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
-      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
-        <div style="font-size:14px;font-weight:700">Mute a whole feature</div>
-        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">A shortcut, not a duplicate: turning a feature off here silences everything it sends, whatever the rows above say.</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#FCFCFB">
-          <th style="text-align:left;padding:8px 20px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Feature</th>
-          <th style="width:90px;padding:8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">In-app</th>
-          <th style="width:90px;padding:8px 20px 8px 8px;font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.06em">Email</th>
-        </tr></thead>
-        <tbody>${NOTIF_KINDS.map(([k,l])=>_feat(k,l)).join('')}</tbody>
       </table>
     </div>
 
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
       <div style="font-size:14px;font-weight:700;margin-bottom:3px">Sender identity</div>
       <div style="font-size:12px;color:#9CA3AF;margin-bottom:12px">The name and address outgoing email is sent from.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="grid grid-cols-2 gap-3">
         <div>
           <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
           <input id="ns-from-name" value="${esc(ns.email_from_name||'Evarca')}" placeholder="Evarca" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
@@ -443,7 +392,6 @@ function settingsPage(){
             <label for="tpl-body-${ev.key}" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Body</label>
             <textarea id="tpl-body-${ev.key}" rows="6"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;resize:vertical;font-family:monospace;line-height:1.6" class="rf">${esc(tpl.body||'')}</textarea>
-            <div style="font-size:11px;color:#B8B5AC;margin-top:4px">Tip: each line in the body becomes a paragraph in the email.</div>
           </div>
           <div style="display:flex;gap:8px;margin-top:12px">
             ${btn('Reset to default',`App._resetTpl('${ev.key}')`,{variant:'ghost',size:'sm'})}
@@ -498,7 +446,7 @@ App._exportCSV=()=>{
   if(fArr('locs').length)subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('locs').some(l=>(c?.locationIds||[]).includes(l));});
   if(fArr('stats').length)subs=subs.filter(s=>fArr('stats').includes(s.status));
   if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
-  const summaryRows=[['#','User','Email','Phone','Department','Position','Checklist','Dept','Location(s)','Date','Status','Submitted At','Edit Count','Pending Approval','Compliance','Escalations']];
+  const summaryRows=[['#','User','Email','Phone','Department','Position','Checklist','Dept','Client(s)','Date','Status','Submitted At','Edit Count','Pending Approval','Compliance','Escalations']];
   subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;if(!c&&!s.checklistDeleted)return;const clName=c?c.name:'[Deleted checklist]';const clDept=c?c.department||'':'';const clLocs=c?(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; '):'';const _escN=(c&&(c.questionIds||[]).length)?_subEscalationCount(c,s):0;const _compTxt=(c&&(c.questionIds||[]).length)?(_escN>0?'Non-compliant':'Compliant'):'N/A';summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',clName,clDept,clLocs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No',_compTxt,_escN]);});
   // Also export question responses as a second sheet
   const qRows=[['Sub #','User','Email','Checklist','Date','Status','Question','Response','Comment','Escalated']];
@@ -514,19 +462,5 @@ App._exportCSV=()=>{
 };
 
 App._setSTab=(k)=>{S.filters.stab=k;S.filters.tplKey=null;rr();};
-/* Per-feature master switch (hrm_config.inappKinds / emailKinds). The row is written back with a
-   TARGETED push that sends only the `extras` blob, so the rest of the shared config row is left
-   exactly as the server has it. */
-App._kindTog=(btn,store,kind)=>{
-  if(!can('settings','edit'))return toast('You need Settings → Edit','err');
-  const C=DB.hrmConfig=DB.hrmConfig||{};
-  const bucket=C[store]=C[store]||{};
-  const nowOn=btn.classList.contains('off');
-  btn.classList.toggle('on',nowOn);btn.classList.toggle('off',!nowOn);
-  btn.setAttribute('aria-checked',nowOn?'true':'false');
-  bucket[kind]=nowOn;
-  saveDB();_pushNotifKinds();
-};
-
 /* — auto: expose on window (modules resolve cross-file references via window at call time) — */
 window.NS_LS=NS_LS;window.EMAIL_EVENTS=EMAIL_EVENTS;window._defaultTemplates=_defaultTemplates;window._nsDefault=_nsDefault;window._loadNS=_loadNS;window._saveNS=_saveNS;window._fillTemplate=_fillTemplate;window._bodyToHtml=_bodyToHtml;window.sendEmail=sendEmail;window._nsTogRow=_nsTogRow;window.settingsPage=settingsPage;

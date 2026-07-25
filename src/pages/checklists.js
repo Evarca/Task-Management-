@@ -34,22 +34,17 @@ let list=(isAdmin()||_clSc==='everyone')?DB.checklists:DB.checklists.filter(c=>c
   if(f.clbFreq)list=list.filter(c=>(c.frequency||'')===f.clbFreq);
   if(f.clbStatus)list=list.filter(c=>(c.status||'Active')===f.clbStatus);
   const _deps=[...new Set(DB.checklists.map(c=>c.department).filter(Boolean))].sort();
-  const _selSt='font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto';
   const _act=!!(f.clbQ||f.clbClient||f.clbDep||f.clbFreq||f.clbStatus);
-  const filterBar=`<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px">
-    <div style="position:relative;flex:1;min-width:180px">
-      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3)">${ic('search','w-4 h-4')}</span>
-      <input id="clb-q" value="${esc(q)}" oninput="S.filters.clbQ=this.value;App._searchRR('clb-q')" placeholder="Search checklists…" class="ui-input" style="padding-left:34px;min-height:0;height:34px;font-size:13px"/>
-    </div>
-    ${clientFilter('clbClient',_selSt)}
-    ${_deps.length?`<select onchange="S.filters.clbDep=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">All departments</option>${_deps.map(d=>`<option value="${esc(d)}" ${f.clbDep===d?'selected':''}>${esc(d)}</option>`).join('')}</select>`:''}
-    <select onchange="S.filters.clbFreq=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">Any frequency</option>${['Daily','Weekly','Monthly','Custom'].map(x=>`<option value="${x}" ${f.clbFreq===x?'selected':''}>${x}</option>`).join('')}</select>
-    <select onchange="S.filters.clbStatus=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">Any status</option>${['Active','Draft','Inactive'].map(x=>`<option value="${x}" ${f.clbStatus===x?'selected':''}>${x}</option>`).join('')}</select>
-    ${_act?`<button onclick="['clbQ','clbClient','clbDep','clbFreq','clbStatus'].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:''}
-    <span style="font-size:11.5px;color:var(--c-text-3);font-weight:600">${list.length} of ${total}</span>
-  </div>`;
+  const _filterBar=filterBar(
+     filterSearch('clb-q','clbQ','Search checklists…')
+    +clientFilter('clbClient',FILTER_SEL_ST)
+    +(_deps.length?filterSelect('clbDep','All departments',_deps,f.clbDep):'')
+    +filterSelect('clbFreq','Any frequency',['Daily','Weekly','Monthly','Custom'],f.clbFreq)
+    +filterSelect('clbStatus','Any status',['Active','Draft','Inactive'],f.clbStatus)
+    +(_act?filterClear(['clbQ','clbClient','clbDep','clbFreq','clbStatus']):'')
+    +filterCount(list.length+' of '+total));
   return`<div class="fade">${hdr('Create Checklist',total+' configured',can('checklists','create')?btnP('New checklist','App.editCl()','plus'):'')}
-  ${filterBar}
+  ${_filterBar}
   <div class="space-y-2.5">
     ${(list.length?list:[]).map(c=>{
       const ass=(c.assignees||[]).map(uById).filter(Boolean);
@@ -123,19 +118,24 @@ function _renderClModal(editing){
           </div>
         </div>
         <div>
-          <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Deadline <span class="font-normal text-ink-300">(both optional — leave blank and it is never marked late)</span></label>
+          <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Deadline <span class="font-normal text-ink-300">(optional)</span></label>
           <div class="grid grid-cols-2 gap-3">
             <div><label for="cn-ddate" class="block text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-1">Date</label>
-              <input id="cn-ddate" type="date" value="${esc(_clDeadlineDate(c.id)||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input id="cn-ddate" type="date" value="${esc(_clDeadlineDate(c.id)||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
+                <button type="button" onclick="App._clearDeadline('date')" title="Remove the deadline date" aria-label="Remove the deadline date" style="flex-shrink:0;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;border:1.5px solid #ECEDF0;background:#fff;color:#9CA3AF;cursor:pointer">${ic('x','w-4 h-4')}</button>
+              </div></div>
             <div><label for="cn-time" class="block text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-1">Time</label>
-              <input id="cn-time" type="time" value="${esc(c.scheduleTime||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input id="cn-time" type="time" value="${esc(c.scheduleTime||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
+                <button type="button" onclick="App._clearDeadline('time')" title="Remove the deadline time" aria-label="Remove the deadline time" style="flex-shrink:0;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;border:1.5px solid #ECEDF0;background:#fff;color:#9CA3AF;cursor:pointer">${ic('x','w-4 h-4')}</button>
+              </div></div>
           </div>
-          <p class="text-[11px] text-ink-400 mt-1.5 leading-relaxed">A <strong>date</strong> makes this a one-off deadline. A <strong>time</strong> alone is the daily cut-off for whichever day the checklist runs. Set both to pin it to an exact moment.</p>
         </div>
       </div>
-      <!-- Locations -->
+      <!-- Clients -->
       ${activeLocs.length?`<div>
-        <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-2">Locations <span class="font-normal text-ink-300">(optional)</span></label>
+        <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-2">Clients <span class="font-normal text-ink-300">(optional)</span></label>
         <div class="flex flex-wrap gap-2">${activeLocs.map(l=>`<label class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border-2 cursor-pointer transition ${(c.locationIds||[]).includes(l.id)?'border-sky-400 bg-sky-50 text-sky-700':'border-ink-100 text-ink-500 hover:border-ink-300'}"><input type="checkbox" class="sr-only" ${(c.locationIds||[]).includes(l.id)?'checked':''} onchange="App._togLoc('${l.id}',this.checked,this)"/>${ic('pin','w-3 h-3')} ${esc(l.name)}</label>`).join('')}</div>
       </div>`:''}
       <!-- Questions -->
@@ -179,14 +179,7 @@ function _freqUI(freq){
   const sd=CLD?.selectedDays||[], sdt=CLD?.selectedDates||[], cdt=CLD?.customDates||[];
   const sched=CLD?.schedule||'Every day';
 
-  if(freq==='Daily'){
-    /* Daily used to offer "Every day" or "Selected weekdays" — the second was the same thing as
-       Weekly, two ways to say one thing. Daily now simply means every day. */
-    return`<div style="display:flex;align-items:center;gap:9px">
-      <span style="width:30px;height:30px;border-radius:9px;background:#fff;border:1px solid #ECEDF0;display:grid;place-items:center;color:#6B7280;flex-shrink:0">${ic('clock','w-4 h-4')}</span>
-      <div style="font-size:12.5px;color:#6B7280;line-height:1.5">Runs <strong style="color:#15171C">every day</strong>. To run it on particular days only, choose <strong style="color:#15171C">Weekly</strong> above.</div>
-    </div>`;
-  }
+  if(freq==='Daily')return''; // Daily needs no options — it runs every day
 
   if(freq==='Weekly'){
     return`<div>
@@ -206,7 +199,6 @@ function _freqUI(freq){
         ${nums.map(n=>{const on=sdtNorm.includes(n);return`<button type="button" onclick="App._togDN('${n}',this)"
           style="min-width:${n==='L'?48:32}px;height:32px;border-radius:50%;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;background:${on?'#15171C':'#fff'};color:${on?'#fff':'#6B7280'};border-color:${on?'#15171C':'#ECEDF0'};${n==='L'?'border-radius:8px;padding:0 8px':''}" title="${n==='L'?'Last day of month':n}">${n==='L'?'Last':n}</button>`;}).join('')}
       </div>
-      <p style="font-size:11px;color:#9CA3AF">Tip: Select "Last" to always run on the last day of any month (handles 28/29/30/31 automatically)</p>
     </div>`;
   }
 
@@ -238,6 +230,16 @@ function _freqUI(freq){
   return'';
 }
 
+/* Clearing a date/time input is fiddly in some browsers, so each half of the deadline gets an
+   explicit remove button. Emptying the field is all it takes — saving writes the blank back as
+   null, which is what "no deadline" means. */
+App._clearDeadline=(which)=>{
+  const el=document.getElementById(which==='date'?'cn-ddate':'cn-time');
+  if(!el)return;
+  el.value='';
+  if(CLD){if(which==='date')CLD._deadlineDate=null;else CLD.scheduleTime=null;}
+  toast(which==='date'?'Deadline date removed — save to apply':'Deadline time removed — save to apply');
+};
 App._freqChange=f=>{
   const prev=CLD.frequency;
   CLD.frequency=f;
@@ -295,8 +297,7 @@ App._saveCl=(editing)=>{
   if(_existIdx>-1){DB.checklists[_existIdx]=CLD;}else{DB.checklists.push(CLD);}
   const newlyAssigned=(CLD.assignees||[]).filter(uid2=>!prevAssignees.includes(uid2)&&uid2!==S.uid);
   newlyAssigned.forEach(uid2=>{
-    if(_inappOn('checklist')&&(!_ns||_ns.inapp_checklist_assigned!==false))DB.notifications.unshift({id:uid('n'),userId:uid2,text:'📋 Checklist assigned: "'+CLD.name+'"',time:new Date().toISOString(),read:false,kind:'checklist'});
-    queueEmail('checklist_assigned',uid2,null,null,{checklist_name:CLD.name});
+    notifyEvent('checklist_assigned',uid2,'📋 Checklist assigned: "'+CLD.name+'"','mychecklists',{checklist_name:CLD.name});
   });
   if(newlyAssigned.length)_invalidateNotifCache();
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
@@ -367,7 +368,7 @@ App.delCl=(id)=>{
   DB.checklists=DB.checklists.filter(x=>x.id!==id);
   DB.submissions.filter(s=>s.checklistId===id).forEach(s=>s.checklistDeleted=true);
   const clAssignees=c.assignees||[];
-  clAssignees.forEach(uid2=>{if(uid2!==S.uid&&_inappOn('checklist'))DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false,kind:'checklist'});});
+  clAssignees.forEach(uid2=>{if(uid2!==S.uid)notifyEvent('checklist_assigned',uid2,'Checklist removed: "'+c.name+'" is no longer assigned to you','mychecklists',{checklist_name:c.name});});
   _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);
   toast('Deleted','warn');saveDB();render();
   // ── Sync to Supabase in background ──

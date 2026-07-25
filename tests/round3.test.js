@@ -262,7 +262,7 @@ describe('5 — Settings shows each switch once', () => {
     ['inapp', 'email', 'hrmemail', 'workflow'].forEach(t => {
       W.S.filters = { stab: t };
       const html = W.pageContent();
-      expect(html).toContain('What gets sent, and how');
+      expect(html).toContain('>Notifications<');
     });
   });
 });
@@ -273,7 +273,7 @@ describe('7 — Daily means every day', () => {
     W.App.editCl('c1');
     const m = document.getElementById('modal');
     expect(m.innerHTML).not.toContain('Selected weekdays');
-    expect(m.innerHTML).toContain('every day');
+    expect(m.innerHTML).not.toContain('cn-daysel');   // the weekday picker is gone entirely
     W.App.closeModal();
     expect(typeof W.App._dailySched).toBe('undefined');
   });

@@ -28,7 +28,7 @@ function locsPage(){
       +(stab==='docs'?_locDocsTab(l.id):'')
       +(stab==='info'
         ?'<div class="bg-white rounded-2xl border border-ink-100 p-5 space-y-3">'
-          +[['Name',l.name],['Address',l.address||'—'],['Department',l.department||'All departments'],['Status',l.status||'Active']].map(([k,v])=>'<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9CA3AF;margin-bottom:2px">'+k+'</div><div style="font-size:14px;font-weight:600">'+esc(v)+'</div></div>').join('')
+          +(()=>{const m=(DB.tmClientMeta||{})[l.id]||{};return [['Name',l.name],['Contact person',m.contactName||'—'],['Contact email',m.contactEmail||'—'],['Contact phone',m.contactPhone||'—'],['Reference / licence no.',m.reference||'—'],['Address',l.address||'—'],['Owning department',l.department||'All departments'],['Status',l.status||'Active'],['Notes',m.notes||'—']];})().map(([k,v])=>'<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9CA3AF;margin-bottom:2px">'+k+'</div><div style="font-size:14px;font-weight:600">'+esc(v)+'</div></div>').join('')
           +'</div>'
         :'')
       +'</div>';
@@ -53,19 +53,13 @@ function locsPage(){
     :String(a2.name||'').localeCompare(String(b2.name||'')));
   const deps=[...new Set(DB.locations.map(l=>l.department).filter(Boolean))].sort();
   const active=!!(f.clQ||f.clStatus||f.clDep||(f.clSort&&f.clSort!=='name'));
-  const selSt='font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto';
-
-  const filterBar=`<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px">
-    <div style="position:relative;flex:1;min-width:180px">
-      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3)">${ic('search','w-4 h-4')}</span>
-      <input id="cl-q" value="${esc(f.clQ||'')}" oninput="S.filters.clQ=this.value;App._searchRR('cl-q')" placeholder="Search clients by name, address or department…" class="ui-input" style="padding-left:34px;min-height:0;height:34px;font-size:13px"/>
-    </div>
-    <select onchange="S.filters.clStatus=this.value;rr()" class="ui-select" style="${selSt}"><option value="">Any status</option>${['Active','Inactive'].map(x=>`<option value="${x}" ${f.clStatus===x?'selected':''}>${x}</option>`).join('')}</select>
-    ${deps.length?`<select onchange="S.filters.clDep=this.value;rr()" class="ui-select" style="${selSt}"><option value="">All departments</option>${deps.map(d=>`<option value="${esc(d)}" ${f.clDep===d?'selected':''}>${esc(d)}</option>`).join('')}</select>`:''}
-    <select onchange="S.filters.clSort=this.value;rr()" class="ui-select" style="${selSt}"><option value="name">Name A–Z</option><option value="checklists" ${sort==='checklists'?'selected':''}>Most checklists</option><option value="files" ${sort==='files'?'selected':''}>Most files</option></select>
-    ${active?`<button onclick="['clQ','clStatus','clDep','clSort'].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:''}
-    <span style="font-size:11.5px;color:var(--c-text-3);font-weight:600">${list.length} of ${total}</span>
-  </div>`;
+  const _filterBar=filterBar(
+     filterSearch('cl-q','clQ','Search clients by name, address or department…')
+    +filterSelect('clStatus','Any status',['Active','Inactive'],f.clStatus)
+    +(deps.length?filterSelect('clDep','All departments',deps,f.clDep):'')
+    +`<select onchange="S.filters.clSort=this.value;rr()" class="ui-select" style="${FILTER_SEL_ST}" aria-label="Sort clients"><option value="name">Name A–Z</option><option value="checklists" ${sort==='checklists'?'selected':''}>Most checklists</option><option value="files" ${sort==='files'?'selected':''}>Most files</option></select>`
+    +(active?filterClear(['clQ','clStatus','clDep','clSort']):'')
+    +filterCount(list.length+' of '+total));
 
   const rows=list.map(l=>{
     const nD=_n(l),nF=(DB.tmFolders||[]).filter(x=>x.locationId===l.id&&!x.parentId).length,nC=_c(l);
@@ -90,7 +84,7 @@ function locsPage(){
     </tr>`;}).join('');
 
   return'<div class="fade">'+hdr('Clients',total+' client'+(total===1?'':'s'),can('locations','create')?btnP('Add client','App.editLoc()','plus'):'')
-    +filterBar
+    +_filterBar
     +(list.length?`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
       <div class="overflow-x-auto"><table class="w-full text-sm">
         <thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left">
@@ -108,15 +102,69 @@ function locsPage(){
     +'</div>';
 }
 
-App.editLoc=(id=null)=>{const l=id?locById(id):null;modalShell({title:`${l?'Edit':'New'} client`,size:'max-w-sm',
-  body:`<div style="display:flex;flex-direction:column;gap:14px">${fld('Client name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...DB.departments.map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}
-</div>`,
-  footer:btnG('Cancel','App.closeModal()')+btnP(l?'Save':'Create',`App.saveLoc('${id||''}')`)});};
-App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);
-  // BUGFIX companion: a non-admin creator with city chips would lose sight of their own new
-  // client — add it to their client scope on create so it stays visible to them.
-  if(!id){const _cu=me();if(_cu&&Array.isArray(_cu.cities)&&_cu.cities.length&&!_cu.cities.includes(obj.id)){_cu.cities.push(obj.id);sb.from('profiles').update({cities:_cu.cities}).eq('id',_cu.id).then(()=>{}).catch(()=>{});}}
-  log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated':'Created');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('location')(error);}).catch(_syncErr('location'));};
+App.editLoc=(id=null)=>{
+  const l=id?locById(id):null;
+  const m=(DB.tmClientMeta||{})[id||'']||{};
+  const lab='display:block;font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px';
+  modalShell({title:`${l?'Edit':'New'} client`,sub:l?esc(l.name):'Add a client you run checklists for',size:'max-w-md',
+  body:`<div style="display:flex;flex-direction:column;gap:14px">
+    ${fld('Client name *','ln-n',l?.name||'','text','e.g. Acme Trading LLC')}
+    <div class="grid grid-cols-2 gap-3">
+      ${fld('Contact person','ln-cn',m.contactName||'','text','Who you deal with')}
+      ${fld('Reference / licence no.','ln-ref',m.reference||'','text','Optional')}
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      ${fld('Contact email','ln-ce',m.contactEmail||'','email','name@company.com')}
+      ${fld('Contact phone','ln-cp',m.contactPhone||'','tel','+971…')}
+    </div>
+    ${fld('Address','ln-a',l?.address||'','text','Office or trade address')}
+    <div class="grid grid-cols-2 gap-3">
+      ${selF('Owning department','ln-d',[['','All departments'],...DB.departments.map(d=>[d.name,d.name])],l?.department||'')}
+      ${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}
+    </div>
+    <div><label for="ln-notes" style="${lab}">Notes</label>
+      <textarea id="ln-notes" rows="3" class="ui-input rf" placeholder="Anything the team should know about this client…">${esc(m.notes||'')}</textarea></div>
+  </div>`,
+  footer:btnG('Cancel','App.closeModal()')+btnP(l?'Save':'Create client',`App.saveLoc('${id||''}')`)});
+};
+App.saveLoc=(id)=>{
+  const n=$('#ln-n')?.value.trim();
+  if(!n){toast('Client name is required','err');return;}
+  const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};
+  const obj=id?locById(id):{id:uid('loc'),...data};
+  if(id)Object.assign(obj,data);else DB.locations.push(obj);
+  // A non-admin creator with client chips would otherwise lose sight of the client they just
+  // made — add it to their own scope on create.
+  if(!id){const cu=me();if(cu&&Array.isArray(cu.cities)&&cu.cities.length&&!cu.cities.includes(obj.id)){cu.cities.push(obj.id);sb.from('profiles').update({cities:cu.cities}).eq('id',cu.id).then(()=>{}).catch(()=>{});}}
+  // The contact details live in the new tm_client_meta table, so `locations` keeps its shape.
+  _clientMetaSave(obj.id,{
+    contactName:$('#ln-cn')?.value.trim()||'',
+    contactEmail:$('#ln-ce')?.value.trim()||'',
+    contactPhone:$('#ln-cp')?.value.trim()||'',
+    reference:$('#ln-ref')?.value.trim()||'',
+    notes:$('#ln-notes')?.value.trim()||'',
+  });
+  log(fullName(me()),id?'Edited client':'Created client',n);
+  toast(id?'Client updated':'Client created');saveDB();closeModal();render();
+  sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('client')(error);}).catch(_syncErr('client'));
+};
+/* Client details: local write plus a targeted upsert on the new table. */
+function _clientMetaSave(clientId,meta){
+  DB.tmClientMeta=DB.tmClientMeta||{};
+  DB.tmClientMeta[clientId]={...(DB.tmClientMeta[clientId]||{}),...meta};
+  sb.from('tm_client_meta').upsert({client_id:clientId,contact_name:meta.contactName||'',contact_email:meta.contactEmail||'',
+    contact_phone:meta.contactPhone||'',reference:meta.reference||'',notes:meta.notes||'',updated_at:new Date().toISOString()},{onConflict:'client_id'})
+    .then(({error})=>{if(error)_syncErr('client details')(error);}).catch(_syncErr('client details'));
+}
+async function _clientMetaLoad(){
+  try{
+    const {data,error}=await sb.from('tm_client_meta').select('*');
+    if(error)return;
+    DB.tmClientMeta={};
+    (data||[]).forEach(r=>{DB.tmClientMeta[r.client_id]={contactName:r.contact_name||'',contactEmail:r.contact_email||'',contactPhone:r.contact_phone||'',reference:r.reference||'',notes:r.notes||''};});
+  }catch(e){console.warn('[client details] load skipped:',e&&e.message);}
+}
+
 App.delLoc=(id)=>{if(!can('locations','delete'))return toast('You need Clients → Delete','err');const l=locById(id);if(!l)return;
 // Referential-integrity guard: blocked while people are assigned to it, checklists use it,
 // or announcements target it.
@@ -129,4 +177,4 @@ DB.users.forEach(u=>{if(u.hrm&&u.hrm.locationId===id)u.hrm.locationId=null;});
 saveDB();render();toast('Deleted','warn');sb.from('locations').delete().eq('id',id).then(({error})=>{if(error)console.error('delLoc:',error.message);}).catch(()=>{});};
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.locsPage=locsPage;
+window.locsPage=locsPage;window._clientMetaSave=_clientMetaSave;window._clientMetaLoad=_clientMetaLoad;

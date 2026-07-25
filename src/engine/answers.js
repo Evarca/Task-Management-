@@ -189,7 +189,7 @@ App._ansEditSend=(clId,date,qId)=>{
   const targets=new Set();
   if(me2&&me2.managerId)targets.add(me2.managerId);
   DB.users.filter(u=>u.status==='Active'&&u.id!==S.uid&&(isSuperU(u)||canUser(u,'checklists','approve'))).forEach(u=>targets.add(u.id));
-  targets.forEach(t=>_hrmNotify(t,txt,'checklist','approvals'));
+  notifyEventAll('approval_requested',[...targets],txt,'approvals',{checklist_name:(c&&c.name)||''});
   log(fullName(me2),'Requested answer edit',(c?c.name:'')+' · '+String(q?q.text:'').slice(0,60));
   saveDB();closeModal();toast('Edit request sent to your manager');rr();
 };
@@ -210,7 +210,7 @@ App._ansEditDecide=(editId,action)=>{
         .then(({error})=>{if(error)_syncErr('unlock answer')(error);}).catch(_syncErr('unlock answer'));}
   }
   const c=clById(e.checklistId);const q=(DB.questions||[]).find(x=>x.id===e.questionId);
-  _hrmNotify(e.requestedBy,(approve?'✅ Edit approved: ':'❌ Edit rejected: ')+'"'+String(q?q.text:'answer').slice(0,40)+'" in '+(c?c.name:'a checklist')+(approve?' — you can change it now':''),'checklist','mychecklists');
+  notifyEvent('approval_decided',e.requestedBy,(approve?'✅ Edit approved: ':'❌ Edit rejected: ')+'"'+String(q?q.text:'answer').slice(0,40)+'" in '+(c?c.name:'a checklist')+(approve?' — you can change it now':''),'mychecklists',{checklist_name:(c&&c.name)||''});
   log(fullName(me()),approve?'Approved answer edit':'Rejected answer edit',(c?c.name:'')+' · '+fullName(uById(e.requestedBy)));
   saveDB();toast(approve?'Edit approved — they can change that answer':'Edit rejected','ok');_touchAction();rr();
 };
@@ -223,7 +223,7 @@ App._ansUnlock=(clId,date,qId)=>{
     .then(({error})=>{if(error)_syncErr('unlock answer')(error);}).catch(_syncErr('unlock answer'));
   if(a.submittedBy&&a.submittedBy!==S.uid){
     const q=(DB.questions||[]).find(x=>x.id===qId);
-    _hrmNotify(a.submittedBy,'🔓 '+fullName(me())+' unlocked your answer to "'+String(q?q.text:'').slice(0,40)+'" — you can change it','checklist','mychecklists');
+    notifyEvent('approval_decided',a.submittedBy,'🔓 '+fullName(me())+' unlocked your answer to "'+String(q?q.text:'').slice(0,40)+'" — you can change it','mychecklists',{});
   }
   log(fullName(me()),'Unlocked answer',(clById(clId)||{}).name||'');
   saveDB();toast('Answer unlocked');rr();

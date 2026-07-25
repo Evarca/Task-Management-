@@ -165,7 +165,6 @@ App._decide=async(id,status)=>{
   document.querySelectorAll(`[data-id="${id}"]`).forEach(b=>{b.disabled=true;b.style.opacity='0.5';});
   a.status=status;
   const u=uById(a.requesterId),c=clById(a.checklistId);
-  if(typeof queueEmail==='function')queueEmail(status==='Approved'?'submission_approved':'submission_rejected',a.requesterId,a.checklistId,a.date,{checklist_name:(c&&c.name)||'checklist'}); // FINAL-FIX: decision emails
   const s=DB.submissions.find(x=>x.checklistId===a.checklistId&&x.userId===a.requesterId&&x.date===a.date);
   if(s&&a.type==='Submission'){
     if(status==='Approved'){
@@ -184,13 +183,8 @@ App._decide=async(id,status)=>{
       ?'✅ Submission approved — '+c?.name+' on '+fmtD(a.date)
       :'❌ Submission rejected — '+c?.name+'. '+(a.date?fmtD(a.date):''));
   // Gated: feature-level chip (HR Config → Alerts) + the matching event toggle (Settings → In-App).
-  const _evKey=a.type==='Edit Request'?'inapp_approval_decided':(status==='Approved'?'inapp_submission_approved':'inapp_submission_rejected');
-  if(_inappOn('checklist')&&(!_ns||_ns[_evKey]!==false))DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:msg,time:new Date().toISOString(),read:false,kind:'submission'});
-  if(a.type==='Submission'){
-    queueEmail(status==='Approved'?'submission_approved':'submission_rejected', a.requesterId, null, null, {checklist_name:c?.name||''});
-  } else if(a.type==='Edit Request'){
-    queueEmail('approval_decided', a.requesterId, null, null, {checklist_name:c?.name||''});
-  }
+  const _evKey=a.type==='Edit Request'?'approval_decided':(status==='Approved'?'submission_approved':'submission_rejected');
+  notifyEvent(_evKey,a.requesterId,msg,'mychecklists',{checklist_name:(c&&c.name)||''});
   log(fullName(me()),status+' '+a.type,fullName(u));
   _invalidateNotifCache();
   saveDB();

@@ -32,7 +32,7 @@ function auditPage(){
     return true;
   });
   const fActive=!!(F.audActor||F.audDept||F.audCat||F.audQ);
-  const selSt='font-size:12px;padding:6px 26px 6px 10px;min-height:0;height:32px;width:auto';
+
   const catColor={'Checklists':'#0EA5E9','Approvals':'#8B5CF6','Access Control':'#BE123C','Users':'#4338CA','Tickets':'#C2410C','Questions':'#0369A1','Departments':'#0E9F6E','Clients':'#F59E0B','Announcements':'#6B7280','Settings':'#64748B','Other':'#9CA3AF'};
   const list=rows.map(l=>{const c=cat(l);const u=DB.users.find(x=>fullName(x)===l.actor);
     return `<div style="display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--c-border);font-size:13.5px">
@@ -43,14 +43,13 @@ function auditPage(){
       <span style="font-size:11px;color:var(--c-text-3);flex-shrink:0">${new Date(l.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
     </div>`;}).join('');
   return`<div class="fade">${hdr('Audit Logs','Every action taken in the workspace')}
-    <div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px">
-      <input id="aud-q" value="${esc(F.audQ||'')}" oninput="S.filters.audQ=this.value;App._searchRR('aud-q')" placeholder="Search actions…" class="ui-input" style="flex:1;min-width:150px;height:32px;min-height:0;padding:4px 12px;font-size:12.5px"/>
-      <select onchange="S.filters.audActor=this.value;rr()" class="ui-select" style="${selSt}"><option value="">All people</option>${actors.map(a2=>`<option ${F.audActor===a2?'selected':''}>${esc(a2)}</option>`).join('')}</select>
-      <select onchange="S.filters.audDept=this.value;rr()" class="ui-select" style="${selSt}"><option value="">All departments</option>${DB.departments.map(d=>`<option ${F.audDept===d.name?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
-      <select onchange="S.filters.audCat=this.value;rr()" class="ui-select" style="${selSt}"><option value="">All tabs</option>${cats.map(c=>`<option ${F.audCat===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
-      ${fActive?`<button onclick="S.filters.audQ='';S.filters.audActor='';S.filters.audDept='';S.filters.audCat='';rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:''}
-      <span style="font-size:11px;color:var(--c-text-3)">${rows.length} of ${all.length}</span>
-    </div>
+    ${filterBar(
+       filterSearch('aud-q','audQ','Search actions…')
+      +filterSelect('audActor','All people',actors,F.audActor)
+      +filterSelect('audDept','All departments',DB.departments.map(d=>d.name),F.audDept)
+      +filterSelect('audCat','All tabs',cats,F.audCat)
+      +(fActive?filterClear(['audQ','audActor','audDept','audCat']):'')
+      +filterCount(rows.length+' of '+all.length))}
     ${rows.length?card(`<div style="max-height:70vh;overflow-y:auto">${list}</div>`,{pad:false}):card(empty('audit',fActive?'Nothing matches':'No logs yet',fActive?'Try clearing a filter.':'Actions will appear here as people use the app.'),{pad:false})}</div>`;
 }
 App._goNotifFeedback=()=>{S.route="notifications";S.search="";S.expandedCl=null;S.afOpen=null;S.tvUser=null;S.filters={ntab:"Feedback"};render();window.scrollTo(0,0);};

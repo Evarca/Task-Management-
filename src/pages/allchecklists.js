@@ -40,7 +40,9 @@ function allClsPage(){
   const d=S.filters.aclDate;
   const dep=S.filters.aclDep||'';
   const loc=S.filters.aclLoc||'';
-  const filtCls=dd=>DB.checklists.filter(c=>clOn(c,dd)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc)));
+  const mineOnly=!!S.filters.aclMine;   // "Assigned to me" — the page shows everyone by default
+  const filtCls=dd=>DB.checklists.filter(c=>clOn(c,dd)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc))
+    &&(!mineOnly||(c.assignees||[]).includes(S.uid)));
   // ── Hierarchy scope: Super Admin sees everyone; Admin (SubAdmin) / managers see themselves + their tree (users under them, and users under those users) ──
   const _acAll=isAdmin()||scopeOf('checklists')==='everyone';const _acF=scopeFilter('checklists'); // R15: results visibility follows the checklists scope
   const scopeUsers=(_acAll
@@ -94,8 +96,10 @@ function allClsPage(){
     const sgrp=sectionCls.filter(c=>c.anyOne&&(_acAll||(c.assignees||[]).some(a=>scopeIds.has(a)))); // R15
     const sind=sectionCls.filter(c=>!c.anyOne);
     const sUserMap={};
-    sind.forEach(c=>(c.assignees||[]).forEach(uid2=>{if(!scopeIds.has(uid2))return;const u=uById(uid2);if(!u||u.status!=='Active')return;(sUserMap[uid2]=sUserMap[uid2]||[]).push(c);}));
-    const sUserIds=Object.keys(sUserMap).sort((a,b)=>fullName(uById(a)).localeCompare(fullName(uById(b))));
+    sind.forEach(c=>(c.assignees||[]).forEach(uid2=>{if(!scopeIds.has(uid2))return;if(mineOnly&&uid2!==S.uid)return;const u=uById(uid2);if(!u||u.status!=='Active')return;(sUserMap[uid2]=sUserMap[uid2]||[]).push(c);}));
+    // You first, then everyone else alphabetically — so "what's mine" is always at the top.
+    const sUserIds=Object.keys(sUserMap).sort((a,b)=>
+      (a===S.uid?-1:b===S.uid?1:0)||fullName(uById(a)).localeCompare(fullName(uById(b))));
 
     let gHtml='';
     if(sgrp.length){
@@ -130,7 +134,7 @@ function allClsPage(){
               <span style="color:var(--c-text-3);transform:rotate(${uExp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
               ${avatar(u,'w-9 h-9','text-xs')}
               <div style="flex:1;min-width:0">
-                <div style="font-size:14px;font-weight:700;color:var(--c-text)">${esc(fullName(u))}</div>
+                <div style="font-size:14px;font-weight:700;color:var(--c-text)">${esc(fullName(u))}${uid2===S.uid?'<span style="margin-left:6px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:99px;background:var(--c-brand-soft);color:var(--c-brand-ink);vertical-align:middle">You</span>':''}</div>
                 <div style="font-size:12px;color:var(--c-text-3)">${esc(u.position||u.department||'')}${(()=>{const mg=u.managerId?uById(u.managerId):null;return mg?' · under '+esc(fullName(mg)):'';})()}</div>
               </div>
               ${flaggedN?`<span title="${flaggedN} non-compliant submission${flaggedN!==1?'s':''}" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--c-danger-soft);color:var(--c-danger-ink);margin-right:6px">${ic('alert','w-3 h-3')}${flaggedN}</span>`:''}
@@ -148,7 +152,7 @@ function allClsPage(){
   };
 
   // ── Segregate checklists by location: one section per location (Dubai, etc.), then a
-  //    "No location" bucket. A checklist tagged with multiple locations appears under each. ──
+  //    "No client" bucket. A checklist tagged with multiple locations appears under each. ──
   let locationsHtml='';
   let anyContent=false;
   const locList=loc?DB.locations.filter(l=>l.id===loc):DB.locations.slice();
@@ -171,24 +175,21 @@ function allClsPage(){
       const secHtml=renderSection(noLocCls,'locnone');
       if(secHtml){
         anyContent=true;
-        locationsHtml+=locHeader('No location',noLocCls.length,true)+secHtml;
+        locationsHtml+=locHeader('No client',noLocCls.length,true)+secHtml;
       }
     }
   }
 
   return`<div class="fade">
-    ${hdr('All Checklists',"Everyone's checklists and responses")}
-    <!-- Filters row -->
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-      <select onchange="S.filters.aclDep=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" class="ui-select" style="width:auto;font-weight:600">
-        <option value="">All departments</option>
-        ${DB.departments.map(x=>`<option value="${esc(x.name)}" ${dep===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}
-      </select>
-      <select onchange="S.filters.aclLoc=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" class="ui-select" style="width:auto;font-weight:600">
-        <option value="">All clients</option>
-        ${DB.locations.map(x=>`<option value="${x.id}" ${loc===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}
-      </select>
-    </div>
+    ${hdr('All Checklists',mineOnly?'Only the checklists assigned to you':"Everyone's checklists and responses")}
+    <!-- Filters row — shared filter-bar primitives, same as every other list page -->
+    ${filterBar(
+       filterLabel('Filter')
+      +`<select onchange="S.filters.aclDep=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" class="ui-select" style="${FILTER_SEL_ST}" aria-label="All departments"><option value="">All departments</option>${DB.departments.map(x=>`<option value="${esc(x.name)}" ${dep===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`
+      +`<select onchange="S.filters.aclLoc=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" class="ui-select" style="${FILTER_SEL_ST}" aria-label="All clients"><option value="">All clients</option>${DB.locations.map(x=>`<option value="${x.id}" ${loc===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`
+      +(()=>{const n=DB.checklists.filter(c=>clOn(c,d)&&(c.assignees||[]).includes(S.uid)).length;
+        return `<button type="button" onclick="S.filters.aclMine=${mineOnly?'false':'true'};S.filters.aclExp=null;S.filters.aclU=null;rr()" class="ui-tab-pill${mineOnly?' on':''}" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;height:34px" title="Show only the checklists assigned to me">${ic('user','w-3.5 h-3.5')}Assigned to me${n?` <span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:99px;background:${mineOnly?'rgba(255,255,255,.22)':'var(--c-border)'};color:${mineOnly?'#fff':'var(--c-text-2)'}">${n}</span>`:''}</button>`;})()
+      +((dep||loc||mineOnly)?filterClear(['aclDep','aclLoc','aclMine','aclExp','aclU']):''))}
     <!-- Sticky calendar strip (same as Team view) -->
     <div style="position:sticky;top:52px;z-index:10;background:rgba(247,246,242,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);margin:0 -16px;padding:0 16px 10px">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">

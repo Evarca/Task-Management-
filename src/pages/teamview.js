@@ -18,12 +18,11 @@ function teamViewPage(){
       const ids=new Set((DB.checklists||[]).filter(c=>matchesClient(clientIdsOf(c),_tvC)).flatMap(c=>c.assignees||[]));
       team=team.filter(u=>ids.has(u.id));
     }
-    const _tvBar=`<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px">
-      <span style="font-size:11.5px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Filter</span>
-      ${clientFilter('tvClient')}
-      ${_tvC?`<button onclick="delete S.filters.tvClient;rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:''}
-      <span style="font-size:11.5px;color:var(--c-text-3);font-weight:600;margin-left:auto">${team.length} ${team.length===1?'person':'people'}</span>
-    </div>`;
+    const _tvBar=filterBar(
+       filterLabel('Filter')
+      +clientFilter('tvClient',FILTER_SEL_ST)
+      +(_tvC?filterClear(['tvClient']):'')
+      +filterCount(team.length+' '+(team.length===1?'person':'people')));
     if(!team.length)return`<div class="fade">${hdr('Team','Live checklist status of your team')}${_tvBar}${empty('users',_tvC?'Nobody works on that client':'No team members yet',_tvC?'No checklist for that client is assigned to your team.':'Nobody reports to you. Ask an admin to set you as someone\'s manager in Users, or check Access Control → Team view.')}</div>`;
     return`<div class="fade">
       ${hdr('Team','Your people and every checklist — one place')}

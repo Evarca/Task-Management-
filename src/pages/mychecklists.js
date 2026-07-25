@@ -212,7 +212,7 @@ function _clFooter(c,date,sub,isPast,isFuture,u){
     const left='<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#0D7A4E;font-weight:600">'+ic('check','w-3.5 h-3.5')+'Submitted by '+esc(by?fullName(by):'a teammate')+(st?' · '+st:'')+'</span>';
     const right=(sub.status==='Pending Approval'||sub.status==='Pending')
       ?'<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>'
-      :'<span style="font-size:11.5px;color:#B8B5AC">Use <strong>Request edit</strong> on an answer to change it</span>';
+      :'';
     return left+right;
   }
   if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
@@ -533,11 +533,8 @@ App._submitRun=async(clId,date)=>{
   if(needsAppr){
     DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});
     const apprText='🔔 Approval needed: '+fullName(u)+' submitted "'+c.name+'" — awaiting your review';
-    const on=_inappOn('checklist')&&(!_ns||_ns.inapp_submission_submitted!==false);
-    if(mgrId&&on)_hrmNotify(mgrId,apprText,'submission','approvals');
     const admin=DB.users.find(x=>isSuperU(x));
-    if(admin&&admin.id!==mgrId&&on)_hrmNotify(admin.id,apprText,'submission','approvals');
-    _invalidateNotifCache();
+    notifyEventAll('approval_requested',[mgrId,admin&&admin.id],apprText,'approvals',{checklist_name:c.name});
   }
   log(fullName(u),'Submitted '+status,c.name);
   _draftDelete('checklist',clId,date);

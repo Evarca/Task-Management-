@@ -22,7 +22,33 @@ const PERM_GROUPS=['Dashboards & Inbox','Work & Content','People & Org','Adminis
    can never re-seed a built-in role with a narrower permission set than the platform expects.
    TM_AREAS is what the editor RENDERS; resolution (can/scopeOf) always uses the full list. */
 const TM_AREAS=['dashboard','analytics','approvals','teamview','checklists','allChecklists','questions','tickets','announcements','employees','hierarchy','locations','departments','audit','settings','accessControl'];
-const _tmAreas=()=>PERM_AREAS.filter(a=>TM_AREAS.includes(a.key));
+/* Actions PERM_AREAS defines that NOTHING in this build checks. They stay in PERM_AREAS (and in a
+   saved bundle) so the wider platform keeps them, but the editor must not offer a switch that
+   changes nothing — a permission you can turn on and off with no effect is worse than no switch.
+   Verified by grep: no can(area,action) call site exists for any pair below. */
+const TM_HIDDEN_ACTIONS={
+  checklists:['assign'],                              // assigning people IS editing the checklist
+  employees:['manageAssets','assign','manage'],       // assets/lifecycle live in the full platform only
+  locations:['manage'],                               // covered by Create / Edit
+};
+/* Wording for this build. Same keys, same behaviour — the platform's labels talk about HR features
+   that aren't here, which made the editor read as if it controlled more than it does. */
+const TM_AREA_COPY={
+  locations:{label:'Clients',desc:'The client list, and the folders and documents held against each client'},
+  employees:{label:'People',desc:'The people directory — add people, edit them, reset passwords, set who reports to whom'},
+  checklists:{label:'Checklists — builder',desc:'Building checklists, and approving edits to answers that are already submitted'},
+  allChecklists:{label:'Checklists — all results',desc:'Every checklist across the company, not just their own team'},
+  analytics:{label:'Dashboard — Company',desc:'The company-wide view: what is running, what is late, tickets'},
+  approvals:{label:'Inbox — Approvals',desc:'The approvals inbox. What they can actually decide still comes from each area'},
+  teamview:{label:'Checklists — team',desc:"Today's live status for the people who report to them"},
+};
+/* Returns COPIES — PERM_AREAS itself is never mutated, so resolution and the round-trip save keep
+   seeing the full platform list. */
+const _tmAreas=()=>PERM_AREAS.filter(a=>TM_AREAS.includes(a.key)).map(a=>{
+  const hide=TM_HIDDEN_ACTIONS[a.key],copy=TM_AREA_COPY[a.key];
+  if(!hide&&!copy)return a;
+  return {...a,...(copy||{}),actions:hide?a.actions.filter(x=>!hide.includes(x)):a.actions};
+});
 const PERM_AREAS=[
   {key:'dashboard',label:'Dashboard — My Day',desc:'The landing overview',actions:['view'],scoped:false,group:'Dashboards & Inbox'},
   {key:'attendance',label:'Attendance',desc:'Clock-in/out records & calendar',actions:['view','edit','download'],scoped:true,group:'Time & Leave'},
@@ -283,4 +309,4 @@ function scopeFilter(area){
 function scopedUsers(area){const f=scopeFilter(area);return DB.users.filter(u=>f(u.id));}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.PERM_GROUPS=PERM_GROUPS;window.PERM_AREAS=PERM_AREAS;window.TM_AREAS=TM_AREAS;window._tmAreas=_tmAreas;window.PERM_ACTION_LABEL=PERM_ACTION_LABEL;window.SCOPE_ORDER=SCOPE_ORDER;window.SCOPE_CHOICES=SCOPE_CHOICES;window.SCOPE_LABEL=SCOPE_LABEL;window._areaByKey=_areaByKey;window._seedRoleProfiles=_seedRoleProfiles;window._permsMicroMigrate=_permsMicroMigrate;window._permsMicroExpand=_permsMicroExpand;window._MICRO_EXPAND=_MICRO_EXPAND;window._myProfile=_myProfile;window._roleOf=_roleOf;window._userPermArea=_userPermArea;window.can=can;window.canUser=canUser;window._acLockoutSafe=_acLockoutSafe;window._roleIdForUser=_roleIdForUser;window._permsV3Migrate=_permsV3Migrate;window.scopeOf=scopeOf;window.scopeFilter=scopeFilter;window.scopedUsers=scopedUsers;
+window.PERM_GROUPS=PERM_GROUPS;window.PERM_AREAS=PERM_AREAS;window.TM_AREAS=TM_AREAS;window.TM_HIDDEN_ACTIONS=TM_HIDDEN_ACTIONS;window.TM_AREA_COPY=TM_AREA_COPY;window._tmAreas=_tmAreas;window.PERM_ACTION_LABEL=PERM_ACTION_LABEL;window.SCOPE_ORDER=SCOPE_ORDER;window.SCOPE_CHOICES=SCOPE_CHOICES;window.SCOPE_LABEL=SCOPE_LABEL;window._areaByKey=_areaByKey;window._seedRoleProfiles=_seedRoleProfiles;window._permsMicroMigrate=_permsMicroMigrate;window._permsMicroExpand=_permsMicroExpand;window._MICRO_EXPAND=_MICRO_EXPAND;window._myProfile=_myProfile;window._roleOf=_roleOf;window._userPermArea=_userPermArea;window.can=can;window.canUser=canUser;window._acLockoutSafe=_acLockoutSafe;window._roleIdForUser=_roleIdForUser;window._permsV3Migrate=_permsV3Migrate;window.scopeOf=scopeOf;window.scopeFilter=scopeFilter;window.scopedUsers=scopedUsers;

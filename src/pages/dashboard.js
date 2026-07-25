@@ -117,39 +117,6 @@ App._clDrill=(clId,date)=>{
     footer:btnG('Close','App.closeModal()')+btnP('Open checklists',"App.closeModal();App.go('allcl')")});
 };
 
-/* ── SETUP GUIDE — a living checklist on the admin dashboard: what to configure next, one click away.
-      Auto-checks real data; disappears forever once complete (or when dismissed). ── */
-function _setupGuideWidget(){
-  if(!can('accessControl','manage'))return'';
-  try{if(localStorage.getItem('bridge_setup_dismissed'))return'';}catch(e){}
-  const items=[
-    ['Add your departments',(DB.departments||[]).length>0,'departments'],
-    ['Add your people',(DB.users||[]).filter(u=>u.status==='Active').length>1,'users'],
-    ['Set who reports to whom',(DB.users||[]).some(u=>u.managerId),'users'],
-    ['Assign access roles',(DB.users||[]).filter(u=>u.status==='Active').every(u=>u.hrm?.roleProfileId),'accesscontrol'],
-    ['Create the first checklist',(DB.checklists||[]).length>0,'checklists'],
-    ['Build the question bank',(DB.questions||[]).length>0,'questions'],
-    ['Assign a checklist to someone',(DB.checklists||[]).some(c=>(c.assignees||[]).length>0),'checklists'],
-    ['Add your clients',(DB.locations||[]).some(l=>l.status==='Active'),'locations'],
-  ];
-  const done=items.filter(i=>i[1]).length;
-  if(done===items.length)return'';
-  return `<div class="ui-card" style="padding:16px;margin-bottom:16px;border-left:3px solid var(--c-brand)">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <div style="flex:1"><div class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">Setup guide — ${done}/${items.length} done</div>
-      <div style="font-size:11.5px;color:var(--c-text-3)">Finish these and the app runs itself. Each one is one click away.</div></div>
-      <button onclick="try{localStorage.setItem('bridge_setup_dismissed','1')}catch(e){};rr()" style="border:none;background:transparent;color:var(--c-text-3);cursor:pointer;font-size:11px;font-weight:700">Hide</button>
-    </div>
-    <div style="height:6px;background:var(--c-border);border-radius:3px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${Math.round(done/items.length*100)}%;background:var(--c-brand)"></div></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px">
-      ${items.map(([l,ok,r])=>`<button onclick="App.go('${r}')" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;border:1px solid ${ok?'transparent':'var(--c-border)'};background:${ok?'transparent':'var(--c-surface)'};cursor:pointer;text-align:left;${ok?'opacity:.55':''}">
-        <span style="width:18px;height:18px;border-radius:50%;background:${ok?'#22C55E':'var(--c-border)'};color:#fff;display:grid;place-items:center;flex-shrink:0">${ok?ic('check','w-3 h-3'):''}</span>
-        <span style="font-size:12px;font-weight:${ok?'600':'700'};color:var(--c-text);${ok?'text-decoration:line-through':''}">${l}</span>
-      </button>`).join('')}
-    </div>
-  </div>`;
-}
-
 /* ===== DASHBOARD HELPERS: date range filter + tickets panel ===== */
 const DASH_RANGES=[['all','All time'],['today','Today'],['yesterday','Yesterday'],['cweek','Current week'],['lweek','Last week'],['cmonth','Current month'],['lmonth','Last month'],['custom','Custom range']];
 function _dashRangeBounds(){
@@ -297,7 +264,7 @@ function adminDash(){
     return{name:d.name,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};
   }).filter(d=>d.cls||d.total);
   const recent=fSubs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,8);
-  return`<div class="fade">${_setupGuideWidget()}${_clOverviewWidget(today)}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
+  return`<div class="fade">${_clOverviewWidget(today)}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${_dashFilterBar()}
   ${_pulseStrip()}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
@@ -337,4 +304,4 @@ function mgrDash(){
   </div>`;}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._clOverview=_clOverview;window._clOverviewWidget=_clOverviewWidget;window._clOverviewTable=_clOverviewTable;window._CL_STATE_TONE=_CL_STATE_TONE;window._setupGuideWidget=_setupGuideWidget;window._pulseStrip=_pulseStrip;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;
+window._clOverview=_clOverview;window._clOverviewWidget=_clOverviewWidget;window._clOverviewTable=_clOverviewTable;window._CL_STATE_TONE=_CL_STATE_TONE;window._pulseStrip=_pulseStrip;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;
