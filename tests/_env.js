@@ -37,7 +37,7 @@ window.tailwind = {};
 // import order mirrors src/main.js (without ./styles.css and without the boot block)
 const order = [
   '../src/ui/helpers.js', '../src/supabase.js', '../src/state.js', '../src/perms.js',
-  '../src/engine/notifications.js', '../src/engine/core.js', '../src/engine/answers.js',
+  '../src/engine/notifications.js', '../src/engine/core.js', '../src/engine/answers.js', '../src/engine/billing.js',
   '../src/ui/nav.js', '../src/ui/charts.js',
   '../src/pages/login.js', '../src/pages/dashboard.js', '../src/pages/users.js',
   '../src/pages/departments.js',

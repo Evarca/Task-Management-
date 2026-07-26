@@ -423,6 +423,9 @@ async function loadFromSB(){
   _tplLoad().then(()=>{saveDB();rr();}).catch(()=>{});
   _shareLoad().then(()=>{rr();}).catch(()=>{});
   _nudgeLoad().then(()=>{rr();}).catch(()=>{});
+  // -- Round-8 tables: billing, payments, invoices, per-question costs, link prefs, client
+  //    replies. Billing-gated tables simply come back empty for people without the permission. --
+  _billingLoad().then(()=>{saveDB();rr();}).catch(()=>{});
 
   // ── Personal drafts (defensive targeted-load pattern: a missing or
   //    RLS-locked table logs a warning and leaves the local array as-is). ──

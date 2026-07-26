@@ -7,6 +7,7 @@ import './perms.js';
 import './engine/notifications.js';
 import './engine/core.js';
 import './engine/answers.js';
+import './engine/billing.js';
 import './ui/nav.js';
 import './ui/charts.js';
 import './pages/login.js';

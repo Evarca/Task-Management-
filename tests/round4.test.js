@@ -234,7 +234,7 @@ describe('5 — permissions are dynamic and honest', () => {
   });
 
   it('every action still offered maps to a real gate in the source', () => {
-    const source = ['perms.js', 'supabase.js', 'state.js', 'ui/nav.js', 'engine/core.js', 'engine/answers.js']
+    const source = ['perms.js', 'supabase.js', 'state.js', 'ui/nav.js', 'engine/core.js', 'engine/answers.js', 'engine/billing.js']
       .concat(fs.readdirSync(path.join(SRC, 'pages')).map(f => 'pages/' + f))
       .map(read).join('\n');
     const missing = [];

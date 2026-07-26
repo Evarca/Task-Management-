@@ -123,11 +123,11 @@ function _nsDefault(){return{
   inapp_checklist_assigned:true,inapp_submission_submitted:true,
   inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
   inapp_approval_requested:true,inapp_approval_decided:true,
-  inapp_feedback_received:true,inapp_deadline_reminder:true,inapp_escalation:true,inapp_ticket_assigned:true,inapp_ticket_resolved:true,inapp_waiting_client_stale:true,
+  inapp_feedback_received:true,inapp_deadline_reminder:true,inapp_escalation:true,inapp_ticket_assigned:true,inapp_ticket_resolved:true,inapp_waiting_client_stale:true,inapp_client_responded:true,
   email_checklist_assigned:true,email_submission_submitted:false,
   email_submission_late:true,email_submission_approved:true,email_submission_rejected:true,
   email_approval_requested:true,email_approval_decided:true,
-  email_feedback_received:false,email_deadline_reminder:true,email_escalation:true,email_ticket_assigned:true,email_ticket_resolved:true,email_waiting_client_stale:true,
+  email_feedback_received:false,email_deadline_reminder:true,email_escalation:true,email_ticket_assigned:true,email_ticket_resolved:true,email_waiting_client_stale:true,email_client_responded:true,
   templates:{},
 };}
 window._ns=null;

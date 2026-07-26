@@ -43,7 +43,16 @@ window.DB={
   //    tmMeta         per-checklist extras this build adds (the optional deadline date)
   tmAnswers:[],tmAnswerEdits:[],tmMeta:{},
   // ── Location documents (new tm_folders / tm_documents tables) ──
-  tmFolders:[],tmDocuments:[],tmClientMeta:{},tmQStatus:{},tmTemplates:[],tmShareLinks:[],tmNudges:[]
+  tmFolders:[],tmDocuments:[],tmClientMeta:{},tmQStatus:{},tmTemplates:[],tmShareLinks:[],tmNudges:[],
+  // ── Round 8: client billing & the two-way status link ──
+  //    tmBilling        {clientId: {total, currency}} — the engagement value
+  //    tmPayments       one row per payment received
+  //    tmInvoices       issued invoices (template snapshotted onto each)
+  //    tmInvoiceSettings the ONE company invoice template (header/footer/tax/numbering)
+  //    tmQCosts         {'<cl>|<date>|<q>': {amount, setBy, setAt}} — utilized per question
+  //    tmSharePrefs     {clientId: {showTickets, showBilling, allowRespond}} — per-link switches
+  //    tmClientReplies  what the client sent back through the status link
+  tmBilling:{},tmPayments:[],tmInvoices:[],tmInvoiceSettings:null,tmQCosts:{},tmSharePrefs:{},tmClientReplies:[]
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -116,6 +125,14 @@ function loadDB(){
     if(!Array.isArray(DB.tmTemplates))DB.tmTemplates=[];
     if(!Array.isArray(DB.tmShareLinks))DB.tmShareLinks=[];
     if(!Array.isArray(DB.tmNudges))DB.tmNudges=[];
+    // Round 8: billing + client-link state from older saved copies
+    if(!DB.tmBilling||typeof DB.tmBilling!=='object')DB.tmBilling={};
+    if(!Array.isArray(DB.tmPayments))DB.tmPayments=[];
+    if(!Array.isArray(DB.tmInvoices))DB.tmInvoices=[];
+    if(DB.tmInvoiceSettings!==null&&typeof DB.tmInvoiceSettings!=='object')DB.tmInvoiceSettings=null;
+    if(!DB.tmQCosts||typeof DB.tmQCosts!=='object')DB.tmQCosts={};
+    if(!DB.tmSharePrefs||typeof DB.tmSharePrefs!=='object')DB.tmSharePrefs={};
+    if(!Array.isArray(DB.tmClientReplies))DB.tmClientReplies=[];
     // OKR v2 migration: drop the retired question-linked OKR model from stale localStorage.
     // Old rows are recognisable by having no metricType (they carried questionId/rollup instead).
     DB.okrs=(DB.okrs||[]).filter(o=>o&&o.metricType);

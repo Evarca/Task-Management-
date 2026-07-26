@@ -437,6 +437,7 @@ function _qCard(c,q,date,runSubmitted){
           ${(canApprove&&!pend)?`<button onclick="App._ansUnlock('${c.id}','${date}','${q.id}')" title="Unlock this answer so it can be changed" style="font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:8px;border:1px solid #E5E7EB;background:#fff;color:#374151;cursor:pointer">Unlock</button>`:''}
         </span>
       </div>
+      ${_qCostRow(c,q,date)}
     </div>`;
   }
 
@@ -474,8 +475,11 @@ function _qCard(c,q,date,runSubmitted){
       ${(()=>{const st=_qStatusOf(c.id,date,q.id);const cur=st&&st.status;
         const chips=[['in_progress','In progress','#1D4ED8','#EFF6FF','#BFDBFE'],['waiting_client','Waiting on client','#92400E','#FFFBEB','#FDE68A'],['waiting_authority','Waiting on authority','#5B21B6','#F5F3FF','#DDD6FE']];
         return chips.map(([k,l,fg,bg,bd])=>`<button type="button" onclick="App._setQStatus('${c.id}','${date}','${q.id}','${k}')" title="${cur===k?'Tap again to clear':'Mark: '+l}" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid ${cur===k?fg:'#E5E7EB'};background:${cur===k?bg:'#fff'};color:${cur===k?fg:'#9CA3AF'}">${l}</button>`).join('')
-          +(cur&&cur!=='in_progress'?`<span style="font-size:10.5px;color:#92400E;font-weight:700">${_qsDays(_qStatusOf(c.id,date,q.id))}d</span>`:'');})()}
+          +(cur&&cur!=='in_progress'?`<span style="font-size:10.5px;color:#92400E;font-weight:700">${esc(_qsDur(_qStatusOf(c.id,date,q.id))||'0h')}</span>`:'')
+          +(()=>{const rep=!cur?_replyForQ(c.id,date,q.id):null;
+            return rep?`<span title="${esc(rep.message||(rep.kind==='document'?'Documents received — see the client file':'Confirmed by the client'))}" style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:99px;background:#DBEAFE;color:#1D4ED8">CLIENT REPLIED ${esc(_agoLabel(rep.submittedAt).toUpperCase())}${(rep.files||[]).length?' · '+(rep.files||[]).length+' FILE'+((rep.files||[]).length===1?'':'S'):''}</span>`:'';})();})()}
     </div>
+    ${_qCostRow(c,q,date)}
     <div style="display:flex;justify-content:flex-end;margin-top:9px">
       <button ${ready?'':'disabled'} onclick="App._ansSubmit('${c.id}','${date}','${q.id}')" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;padding:8px 16px;border-radius:9px;border:none;cursor:${ready?'pointer':'not-allowed'};background:${ready?'#0E9F6E':'#E5E7EB'};color:${ready?'#fff':'#9CA3AF'}">${ic('check','w-3.5 h-3.5')}${unlocked?'Submit change':'Submit answer'}</button>
     </div>
@@ -658,5 +662,27 @@ App._submitRun=async(clId,date)=>{
   }).catch(e=>console.warn('sub upsert failed:',e.message));
 };
 
+/* ── per-question utilized cost (round 8) ──
+   Shown only when the checklist is attached to a client — that is whose money it is.
+   Any assignee can enter it while doing the work (billing holders can too); the client
+   file and Billing tab roll the numbers up into Utilized. Saved on change; clearing the
+   field removes the record. */
+function _qCostRow(c,q,date){
+  if(!((c&&c.locationIds)||[]).length)return'';
+  const mine=(c.assignees||[]).includes(S.uid);
+  if(!mine&&!canBill())return'';
+  const qc=_qCostOf(c.id,date,q.id);
+  const cur=_cliCurrency((c.locationIds||[])[0]);
+  return `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;padding-top:7px;border-top:1px dashed #E5E7EB">
+    <span style="font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.05em">${ic('receipt','w-3 h-3 inline')} Cost used</span>
+    <span style="font-size:11.5px;font-weight:700;color:#6B7280">${esc(cur)}</span>
+    <input type="number" min="0" step="any" value="${qc&&qc.amount>0?qc.amount:''}" placeholder="0"
+      onchange="App._qCostSet('${c.id}','${date}','${q.id}',this.value)"
+      onkeydown="if(event.key==='Enter')this.blur()"
+      style="width:110px;padding:5px 10px;border-radius:8px;border:1.5px solid #E5E7EB;font-size:12.5px;outline:none" aria-label="Money utilized on this question"/>
+    <span style="font-size:11px;color:#B8B5AC">how much was utilized on this item${qc&&qc.setAt?' · saved '+esc(_agoLabel(qc.setAt)):''}</span>
+  </div>`;
+}
+
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.COLL=COLL;window.homeDash=homeDash;window.myClsPage=myClsPage;window._clFooter=_clFooter;window._qrPhotoList=_qrPhotoList;window._qrHasPhoto=_qrHasPhoto;window._clCard=_clCard;window._dataUrlToBlob=_dataUrlToBlob;window._qCard=_qCard;window._qCardOwn=_qCardOwn;window._ownProgress=_ownProgress;
+window._qCostRow=_qCostRow;window.COLL=COLL;window.homeDash=homeDash;window.myClsPage=myClsPage;window._clFooter=_clFooter;window._qrPhotoList=_qrPhotoList;window._qrHasPhoto=_qrHasPhoto;window._clCard=_clCard;window._dataUrlToBlob=_dataUrlToBlob;window._qCard=_qCard;window._qCardOwn=_qCardOwn;window._ownProgress=_ownProgress;

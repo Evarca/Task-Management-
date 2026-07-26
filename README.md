@@ -91,12 +91,66 @@ The Clients table carries a **Case progress** column (open cases · average % ·
 ## The client status link
 
 The feature that kills the "any update?" call: **Create link** on the client's Progress tab makes
-a read-only page at `#status/<token>` the client can open any time — no login. It shows each
+a page at `#status/<token>` the client can open any time — no login. It shows each
 case's progress bar, target date, step list with done ticks and dates, and a highlighted
-**"We're waiting on you for:"** box (with day counts). It never shows who on the team did what.
+**"We're waiting on you for:"** box — since round 8 with **days-and-hours counts** ("waiting
+2d 5h"). It never shows who on the team did what, and never per-step costs.
 Revoke kills the link instantly. Server side it is one SECURITY DEFINER RPC
-(`tm_client_status`) callable by `anon`; the token — checked against the `tm_share_links`
+(`tm_client_status_v2`) callable by `anon`; the token — checked against the `tm_share_links`
 table — is the whole key, and an invalid or revoked token gets a friendly dead-link page.
+(The original `tm_client_status` RPC is still deployed untouched; only this app moved to v2.)
+
+### The link is two-way now (round 8)
+
+If a step is **Waiting on client** and the link's *Can respond & upload* switch is on (it is by
+default), that step carries a **Respond** box right on the status page. The client can write a
+reply, attach up to 6 documents (25 MB each), or press **"Just confirm"**. Server side it is one
+SECURITY DEFINER RPC (`tm_client_respond`) plus one anon storage policy that only accepts
+uploads under `client-uploads/<their-own-live-token>/…` in the private docs bucket. When they
+respond:
+
+- uploaded files are registered under the client's **Documents tab, in a "From client" folder**;
+- the **waiting-on-client flag clears instantly**, timestamped — the run card and client file
+  show a blue **CLIENT REPLIED <n>h ago** chip instead, and the client sees "SENT <date> ✓";
+- the checklist's **creator and every assignee are notified** (`client_responded` — a real event
+  in Settings with both channels; the RPC honours the switches server-side);
+- a second respond on the same step is refused (`not_waiting`) until the team marks it waiting
+  again — responses are one answer per ask, on file forever in `tm_client_replies` and on the
+  client file's **"From the client"** card.
+
+Two more per-link switches decide what else the client sees (both **off** by default):
+**Open tickets** (titles and statuses only, never assignees) and **Billing summary**
+(Total / Paid / Balance due only — never per-question costs).
+
+## Billing & invoices (round 8)
+
+Money on a client is three numbers, and they live in three new `tm_` tables:
+
+- **Total** — the agreed engagement value + currency, set on the client form ("Full cost",
+  visible to Billing holders only). `tm_billing`.
+- **Paid** — one row per payment received (`tm_payments`). The client form takes an optional
+  **initial payment** at creation; after that, **Record payment** on the client's Billing tab.
+  Balance due = total − paid.
+- **Utilized** — Σ of per-question costs (`tm_q_costs`). Every run card question of a
+  client-attached checklist carries a small **"Cost used"** field: any assignee fills it in as
+  part of doing the work (clearing it removes the record); it rolls up per case and per client.
+
+Every payment can become an **invoice** (`tm_invoices`) — or generate one for any amount. The
+number is allocated atomically by the `tm_next_invoice_no` RPC (INV-0001, INV-0002…, prefix
+configurable); the amount takes a configurable tax line (label + rate, e.g. VAT 5%); and the
+**one company template** — header, address, TRN, logo, footer, terms, currency, tax and
+numbering defaults, all edited from the Billing tab's "Invoice template" — is **snapshotted
+onto the invoice at issue time**, so editing the template later never rewrites a document that
+was already sent. View / print opens a standalone print window (browser print → PDF). Voiding
+keeps the invoice on file with a VOID watermark; numbers are never reused.
+
+**Permission:** everything money sits behind a new granular action — **Clients → Billing &
+invoices** (`locations.billing`). Role seeds are at v11: superadmin/admin re-seed WITH it, every
+other role has it OFF until it is granted in Access Control. The RLS on every billing table
+enforces the same rule server-side (`_can('locations','billing') OR _is_elevated()`), so the
+gate is real even against the raw API. The one deliberate exception: the per-question **cost**
+can also be written by that run's assignees (`tm_q_costs` RLS checks the checklist's assignee
+list) — entering what a step cost is part of doing the step.
 
 ## Clients
 
@@ -191,7 +245,9 @@ them re-declares the row or the control size locally, so they can't drift apart 
 ## What's not in it
 
 **Announcements were removed in round 6** on request — the nav entry, the page, the notification
-event, the templates and every guard that referenced them. The `announcements` table itself is
+event, the templates and every guard that referenced them. (A stale `announcements.js` page module
+was still sitting on disk un-imported and referencing a removed helper; round 8 deleted the file,
+which is also what got the static-reference audit back to green.) The `announcements` table itself is
 untouched (the full platform still owns it), and `#announcements` deep links land on the dashboard.
 
 
@@ -249,10 +305,19 @@ project (see `.env.example`).
 | `tm_nudges` | the record of every reminder emailed to a client, and about what |
 | `tm_folders` | folders under a location |
 | `tm_documents` | files under a location, pointing at the storage bucket |
+| `tm_billing` | one row per client — the engagement total and its currency |
+| `tm_payments` | one row per payment received from a client |
+| `tm_invoices` | issued invoices, each with the company template snapshotted on |
+| `tm_invoice_settings` | the ONE company invoice template (header, footer, tax, numbering) |
+| `tm_q_costs` | one row per (checklist, date, question) — the money utilized on that step |
+| `tm_share_prefs` | per-client link switches: can respond, show tickets, show billing |
+| `tm_client_replies` | what the client sent back through the status link (reply / confirm / documents) |
 
 **New storage buckets:** `tm-location-docs` (private, 25 MB cap, served via 5-minute signed URLs)
 and `tm-answer-photos` (public-read with unguessable paths, 10 MB cap, so answer thumbnails render
-without a signed-URL round trip per image).
+without a signed-URL round trip per image). Round 8 adds one anon INSERT policy on
+`tm-location-docs`: uploads are accepted only under `client-uploads/<token>/…` where the token is
+a live, respond-enabled share link — nothing else in the bucket is readable or writable by anon.
 
 **Existing tables it reads and writes:** `profiles`, `departments`, `locations`, `checklists`,
 `submissions`, `approvals`, `questions`, `tickets`, `notifications`, `feedback`, `announcements`,
@@ -343,7 +408,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 245 assertions in eight files:
+`npm test` runs 269 assertions in nine files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every
@@ -372,6 +437,14 @@ hover. Theme lives in `src/ui/charts.js`.
   blocked card and nudge log; share links created/revoked and the public page rendered from RPC
   data (including that no employee name ever appears); templates applied with dead questions
   dropped.
+- **`tests/round8.test.js`** — money and the two-way link: total/paid/balance/utilized rollups,
+  the client form's full-cost + initial-payment fields (and their absence without the Billing
+  permission), per-question costs normalising onto the case date with assignee/billing gating,
+  invoice numbering via the RPC, tax math, the frozen template snapshot and VOID, link switches
+  defaulting to respond-on/tickets-off/billing-off, the status page rendering waiting durations
+  in days+hours, the respond box (reply shape, confirm, empty-send refusal, cache-rendered open,
+  dead-link page), the team-side CLIENT REPLIED chips, and the `client_responded` event honouring
+  every switch.
 
 Both matter more than usual here, because cross-file references resolve through `window` at call
 time — `vite build` will happily build an app whose buttons throw when clicked.
