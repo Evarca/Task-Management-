@@ -44,6 +44,53 @@ same thing as Weekly under a second name — that is gone, and picking particula
 Weekly is for. A checklist saved by an older build with a weekday list is still honoured until
 it is re-saved, so nothing silently changes schedule.
 
+## Cases (One-time checklists)
+
+A business-setup engagement is a **case**, not a repeating run: it opens once, stays open across
+days until every question is answered and it is submitted, then it closes. Pick frequency
+**"One-time — a client case"** in the builder.
+
+- All of a case's answers live on ONE run date (its start date), so progress **accumulates day
+  after day** instead of resetting at midnight. Every page reads a case through that anchor, so
+  My Checklists, All results, Team and the client file all show the same run whichever calendar
+  day is selected.
+- The **deadline is final**: one date (and optional time). An open case past it is overdue, and
+  the creator plus every assignee's manager are told once a day. A case with no deadline is
+  never late.
+- Once answers exist, the start date is locked (moving it would orphan the recorded answers).
+- **Templates**: "Save as template" in the editor keeps the question list; creating a new
+  checklist then offers "Start from a template" — new client case in seconds. Templates live in
+  the new `tm_templates` table.
+
+Every question on an open run also carries a **working status** the team sets with one tap:
+*In progress*, *Waiting on client*, *Waiting on authority* (tap again to clear; submitting the
+answer is what makes it Done). Waiting badges show **days waiting** everywhere. After 3 days
+waiting on a client, whoever created the checklist gets a daily alert (`waiting_client_stale`
+in Settings, both channels). Statuses live in the new `tm_q_status` table.
+
+## The client file
+
+Open a client and it lands on **Progress** — the screen that answers the phone call:
+
+- contact details, then every **open case**: progress bar, deadline (overdue in red), each step
+  with ✓ + who + when, the **NEXT UP** marker, waiting badges with day counts;
+- a **"Waiting on someone"** card sorted by days stuck, with a **Nudge** button that emails the
+  client's contact about exactly that item (queued via `notif_outbox`, recorded in `tm_nudges`
+  so "we chased on the 4th and the 7th" is on file);
+- recurring work for that client and its today-status; completed cases with completion dates.
+
+The Clients table carries a **Case progress** column (open cases · average % · blocked count).
+
+## The client status link
+
+The feature that kills the "any update?" call: **Create link** on the client's Progress tab makes
+a read-only page at `#status/<token>` the client can open any time — no login. It shows each
+case's progress bar, target date, step list with done ticks and dates, and a highlighted
+**"We're waiting on you for:"** box (with day counts). It never shows who on the team did what.
+Revoke kills the link instantly. Server side it is one SECURITY DEFINER RPC
+(`tm_client_status`) callable by `anon`; the token — checked against the `tm_share_links`
+table — is the whole key, and an invalid or revoked token gets a friendly dead-link page.
+
 ## Clients
 
 What used to be called Locations is now **Clients** throughout the UI. The `locations` table and
@@ -141,7 +188,7 @@ instead of a blank page (`_RETIRED_ROUTES` in `src/ui/nav.js`).
 npm install       # install dependencies
 npm run dev       # local dev server
 npm run build     # production build into dist/
-npm test          # route sweep + reference audit + behaviour tests (194 assertions)
+npm test          # route sweep + reference audit + behaviour tests (215 assertions)
 ```
 
 ## Deploying
@@ -172,6 +219,10 @@ project (see `.env.example`).
 | `tm_answer_edits` | a request to change one submitted answer, and its decision |
 | `tm_checklist_meta` | the optional deadline **date** (the optional deadline time keeps living on `checklists.schedule_time`, which already means exactly that) |
 | `tm_client_meta` | a client's contact person, email, phone, reference number and notes |
+| `tm_q_status` | the working status of one question on one run (in progress / waiting on client / waiting on authority), who set it, when |
+| `tm_templates` | reusable question lists ("Mainland LLC formation") for starting a case in seconds |
+| `tm_share_links` | the client status link tokens, enabled/revoked |
+| `tm_nudges` | the record of every reminder emailed to a client, and about what |
 | `tm_folders` | folders under a location |
 | `tm_documents` | files under a location, pointing at the storage bucket |
 
@@ -261,7 +312,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 194 assertions in five files:
+`npm test` runs 215 assertions in six files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every
@@ -284,6 +335,12 @@ hover. Theme lives in `src/ui/charts.js`.
   editor hiding only actions with no gate while a role save keeps them, no approval toggle on a
   question but the column still round-tripping, and every list page rendering the one shared filter
   bar.
+- **`tests/round5.test.js`** — the case model: open across days, one accumulating run, closing for
+  everyone and disappearing from later days, the final deadline; question statuses set/clear/badge
+  and the 3-day stale alert with its daily dedup; the client file's %, who-did-what, NEXT UP,
+  blocked card and nudge log; share links created/revoked and the public page rendered from RPC
+  data (including that no employee name ever appears); templates applied with dead questions
+  dropped.
 
 Both matter more than usual here, because cross-file references resolve through `window` at call
 time — `vite build` will happily build an app whose buttons throw when clicked.

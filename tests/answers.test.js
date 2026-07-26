@@ -317,13 +317,14 @@ describe('location documents', () => {
     expect(W.DB.tmDocuments.length).toBe(0);
   });
 
-  it('a location detail page opens on Documents and offers no checklist tab', () => {
+  it('a client opens on Progress, with Documents beside it and no checklist tab', () => {
     as('boss');
     W.S.route = 'locations'; W.S.filters = {};
     W.App._openLoc('l1');
     const html = W.pageContent();
+    expect(html).toContain('Progress');
     expect(html).toContain('Documents');
     expect(html).not.toContain('>Checklists<');
-    expect(W.S.filters.locTab).toBe('docs');
+    expect(W.S.filters.locTab).toBe('prog');
   });
 });

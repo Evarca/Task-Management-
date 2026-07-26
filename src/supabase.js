@@ -418,6 +418,10 @@ async function loadFromSB(){
   // ── Location folders + documents (new tm_ tables). ──
   _docsLoad().then(()=>{saveDB();rr();}).catch(()=>{});
   _clientMetaLoad().then(()=>{saveDB();rr();}).catch(()=>{});
+  // ── Round-5 tables: templates, client share links, nudge log (all small; RLS scopes them). ──
+  _tplLoad().then(()=>{saveDB();rr();}).catch(()=>{});
+  _shareLoad().then(()=>{rr();}).catch(()=>{});
+  _nudgeLoad().then(()=>{rr();}).catch(()=>{});
 
   // ── Announcements + personal drafts (defensive targeted-load pattern: a missing or
   //    RLS-locked table logs a warning and leaves the local array as-is). ──

@@ -253,9 +253,10 @@ function _qrPhotoList(qr){
 // True if the response has at least one real photo attached.
 function _qrHasPhoto(qr){return _qrPhotoList(qr).length>0;}
 function _clCard(c,date){
+  date=effDate(c,date); // a case is the same run whichever day you view it from
   const sub=subForCl(c,S.uid,date);
   const today=todayISO();
-  const isPast=date<today;const isFuture=date>today;const u=me();
+  const isPast=!isCase(c)&&date<today;const isFuture=!isCase(c)&&date>today;const u=me();
   const prog=_ansProgress(c,date);
   const st=sub?sub.status:isFuture?'Upcoming':_clOverdue(c,date)?'Late':prog.done?'In progress':'Pending';
   const exp=S.expandedCl===c.id;
@@ -281,6 +282,8 @@ function _clCard(c,date){
       <div style="flex:1;text-align:left;min-width:0">
         <div class="fd" style="font-size:15px;font-weight:800;color:#111110">${esc(c.name)}</div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
+          ${isCase(c)?`<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:#EEF2FF;color:#4338CA;letter-spacing:.03em" title="A one-time client case — open until every question is answered and it is submitted">CASE</span>`:''}
+          ${isCase(c)&&!isSubmitted?`<span style="font-size:11px;color:#B8B5AC">open since ${fmtS(caseDate(c))}</span>`:''}
           ${c.department?`<span style="font-size:12px;color:#B8B5AC">${esc(c.department)}</span>`:''}
           ${dl?`<span title="Deadline" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:${_clOverdue(c,date)&&!isSubmitted?'#DC2626':'#B8B5AC'};flex-shrink:0">${ic('clock','w-3 h-3')}${esc(dl)}</span>`:''}
           ${prog.total?(isSubmitted?_subBadges(c,sub,{small:true})
@@ -396,6 +399,13 @@ function _qCard(c,q,date,runSubmitted){
     ${unlocked?`<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#1D4ED8;background:#EFF6FF;border-radius:8px;padding:5px 9px;margin-bottom:9px">${ic('edit','w-3 h-3')}Unlocked for editing — submit again when you're done</div>`:''}
     ${inputHtml}
     <textarea oninput="App._setQRComment('${c.id}','${q.id}',this.value)" placeholder="${q.comment?'Comment (required)…':'Add a comment (optional)…'}" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1.5px solid ${q.comment?'#FCA5A5':'#E5E7EB'};border-radius:9px;font-size:12px;resize:none;outline:none;font-family:inherit;background:#fff" rows="2">${esc(qr.comment||'')}</textarea>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:9px">
+      <span style="font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.05em">Status</span>
+      ${(()=>{const st=_qStatusOf(c.id,date,q.id);const cur=st&&st.status;
+        const chips=[['in_progress','In progress','#1D4ED8','#EFF6FF','#BFDBFE'],['waiting_client','Waiting on client','#92400E','#FFFBEB','#FDE68A'],['waiting_authority','Waiting on authority','#5B21B6','#F5F3FF','#DDD6FE']];
+        return chips.map(([k,l,fg,bg,bd])=>`<button type="button" onclick="App._setQStatus('${c.id}','${date}','${q.id}','${k}')" title="${cur===k?'Tap again to clear':'Mark: '+l}" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid ${cur===k?fg:'#E5E7EB'};background:${cur===k?bg:'#fff'};color:${cur===k?fg:'#9CA3AF'}">${l}</button>`).join('')
+          +(cur&&cur!=='in_progress'?`<span style="font-size:10.5px;color:#92400E;font-weight:700">${_qsDays(_qStatusOf(c.id,date,q.id))}d</span>`:'');})()}
+    </div>
     <div style="display:flex;justify-content:flex-end;margin-top:9px">
       <button ${ready?'':'disabled'} onclick="App._ansSubmit('${c.id}','${date}','${q.id}')" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;padding:8px 16px;border-radius:9px;border:none;cursor:${ready?'pointer':'not-allowed'};background:${ready?'#0E9F6E':'#E5E7EB'};color:${ready?'#fff':'#9CA3AF'}">${ic('check','w-3.5 h-3.5')}${unlocked?'Submit change':'Submit answer'}</button>
     </div>
@@ -499,6 +509,7 @@ function _dataUrlToBlob(dataUrl){
 }
 App._submitRun=async(clId,date)=>{
   const c=clById(clId);if(!c)return;
+  date=effDate(c,date); // cases close on their one run date
   /* The run is SHARED — one submission per checklist per day, whoever closes it. */
   const existing=runSub(clId,date);
   if(existing&&existing.status!=='Editing'){
@@ -523,7 +534,7 @@ App._submitRun=async(clId,date)=>{
   const today=todayISO();
   const late=_clOverdue(c,date);
   const _ua=(me()?.approval)||{};
-  const _isPast=date<today,_isFut=date>today;
+  const _isPast=!isCase(c)&&date<today,_isFut=!isCase(c)&&date>today;
   const needsAppr=(_isPast&&_ua.past)||(_isFut&&_ua.future);
   const u=me();const mgrId=u?.managerId;
   const status=needsAppr?'Pending Approval':late?'Late':'On Time';

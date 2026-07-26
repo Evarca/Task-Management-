@@ -20,6 +20,7 @@ const NOTIF_EVENTS=[
   {key:'submission_submitted', group:'Checklists',          label:'Checklist submitted',  who:'Their manager'},
   {key:'submission_late',      group:'Checklists',          label:'Submitted late',       who:'Their manager'},
   {key:'deadline_reminder',    group:'Checklists',          label:'Deadline approaching', who:'The person who owes it'},
+  {key:'waiting_client_stale', group:'Checklists',          label:'Blocked on a client 3+ days', who:'Whoever created the checklist'},
   {key:'approval_requested',   group:'Approvals',           label:'Approval needed',      who:'Whoever can decide it'},
   {key:'approval_decided',     group:'Approvals',           label:'Approval decided',     who:'The person who asked'},
   {key:'submission_approved',  group:'Approvals',           label:'Submission approved',  who:'The person who submitted'},
@@ -35,7 +36,7 @@ const _evByKey=k=>NOTIF_EVENTS.find(e=>e.key===k)||null;
 /* Which in-app kind a bell row is tagged with — drives where tapping it lands. */
 const _EVENT_KIND={
   checklist_assigned:'checklist',submission_submitted:'submission',submission_late:'submission',
-  deadline_reminder:'checklist',approval_requested:'submission',approval_decided:'submission',
+  deadline_reminder:'checklist',waiting_client_stale:'checklist',approval_requested:'submission',approval_decided:'submission',
   submission_approved:'submission',submission_rejected:'submission',
   escalation:'ticket',ticket_assigned:'ticket',ticket_resolved:'ticket',
   feedback_received:'feedback',announcement:'announcement',

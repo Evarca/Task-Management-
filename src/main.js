@@ -35,6 +35,9 @@ import './pages/accesscontrol.js';
 
 /* ===== BOOT ===== */
 (async function boot(){
+  // The client's read-only status page: #status/<token> renders BEFORE any auth — the token,
+  // verified server-side by the RPC, is the whole key. Nothing else of the app loads for it.
+  if(_pubStatusBoot())return;
   const _hashRoute=(window.location.hash||'').replace('#','').trim();
   const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','allcl','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile','accesscontrol','announcements','tickets'];
   const _deepLink=VALID_ROUTES.includes(_hashRoute)?_hashRoute:null;
@@ -145,6 +148,11 @@ async function _runDeadlineChecks(){
     const teamSet=adminish?null:new Set(subTree(S.uid).map(u=>u.id)); // a manager only holds their reports' data
     let changed=false;
     (DB.checklists||[]).forEach(c=>{
+      /* ── CASES: one FINAL deadline + stale-blocker alerts (logic lives in answers.js) ── */
+      if(isCase(c)){
+        if(_caseAlerts(c,today,nowM,_dlSent))changed=true;
+        return; // the per-day logic below is for recurring checklists only
+      }
       if(!c.scheduleTime||!clOn(c,today))return;                  // no deadline / not active today
       if(nowM<hm2m(c.scheduleTime)+DEADLINE_GRACE_MIN)return;     // deadline + grace not reached yet
       (c.assignees||[]).forEach(aid=>{

@@ -15,9 +15,29 @@ const initials=u=>((u?.firstName||'?')[0]||'?')+((u?.lastName||'')[0]||'');
 const fullName=u=>(u?(u.firstName||'')+' '+(u.lastName||''):'Unknown').trim()||'Unknown';
 const dayAbbr=iso=>DAYS3[new Date(iso+'T00:00:00').getDay()].slice(0,3);
 
+/* ── CASES (One-time checklists) ──
+   A business-setup engagement is a CASE, not a repeating run: it opens once, stays open across
+   days until every question is answered and it is submitted, then it closes. All of its answers
+   live on ONE run date — the case date — so progress accumulates instead of resetting at
+   midnight. caseDate() is that anchor; effDate() maps any calendar date to it, and the answer /
+   submission lookups below call it so every existing page works on cases unchanged. */
+const isCase=c=>!!c&&c.frequency==='One-time';
+const caseDate=c=>String(c&&(c.startDate||c.createdAt)||todayISO()).slice(0,10);
+const effDate=(c,date)=>isCase(c)?caseDate(c):date;
+/* The submission that closed a case (any non-editing one on the case date). */
+const caseSub=c=>isCase(c)?((DB.submissions||[]).find(s=>s.checklistId===c.id&&s.date===caseDate(c)&&s.status!=='Editing')||null):null;
+
 function clOn(c,date){if(c.status&&c.status!=='Active')return false;
   if(c.startDate&&date<c.startDate)return false;
   if(c.endDate&&date>c.endDate)return false;
+  if(c.frequency==='One-time'){
+    // Open: shows every day from the case date on. Closed: shows through its completion day,
+    // then stops appearing on later days (it lives on in All results / the client file).
+    const cs=caseSub(c);
+    if(!cs)return date>=caseDate(c);
+    const doneDay=String(cs.submittedAt||'').slice(0,10)||caseDate(c);
+    return date>=caseDate(c)&&date<=doneDay;
+  }
   const dy=dayAbbr(date);
   const dn=new Date(date+'T00:00:00').getDate();
   if(c.frequency==='Daily'){
@@ -120,6 +140,8 @@ const I={
   party:`<path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01M22 8h.01M15 2h.01M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"/>`,
   broom:`<path d="M19.4 14.5 17 12m2.4 2.5L12 22l-4-4 7.5-7.4m3.9 3.9L21 13l-3-3-2.6 2.6m-3.9 3.9L7.5 8.6 13 3l3 3-5.4 5.5"/>`,
   info:`<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>`,
+  link:`<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>`,
+  mail:`<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>`,
 };
 const ic=(n,cls='w-5 h-5',sw=2)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${I[n]||''}</svg>`;
 // Map a file extension to an SVG icon (doc/sheet/image/paperclip). cls keeps tiles consistent.
@@ -489,7 +511,7 @@ App._togPw=(id,btn)=>{
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window._draftStrip=_draftStrip;window._draftFor=_draftFor;window._draftSave=_draftSave;window._draftDelete=_draftDelete;
 window._refLinks=_refLinks;window.guardDelete=guardDelete;
-window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.fldPw=fldPw;window.selF=selF;window.mkTog=mkTog;window.card=card;window.clientsOf=clientsOf;window.clientIdsOf=clientIdsOf;window.clientIdsOfTicket=clientIdsOfTicket;window.matchesClient=matchesClient;window.clientFilter=clientFilter;window.FILTER_BAR_ST=FILTER_BAR_ST;window.FILTER_SEL_ST=FILTER_SEL_ST;window.filterBar=filterBar;window.filterLabel=filterLabel;window.filterSearch=filterSearch;window.filterSelect=filterSelect;window.filterClear=filterClear;window.filterCount=filterCount;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;
+window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.isCase=isCase;window.caseDate=caseDate;window.effDate=effDate;window.caseSub=caseSub;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.fldPw=fldPw;window.selF=selF;window.mkTog=mkTog;window.card=card;window.clientsOf=clientsOf;window.clientIdsOf=clientIdsOf;window.clientIdsOfTicket=clientIdsOfTicket;window.matchesClient=matchesClient;window.clientFilter=clientFilter;window.FILTER_BAR_ST=FILTER_BAR_ST;window.FILTER_SEL_ST=FILTER_SEL_ST;window.filterBar=filterBar;window.filterLabel=filterLabel;window.filterSearch=filterSearch;window.filterSelect=filterSelect;window.filterClear=filterClear;window.filterCount=filterCount;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;
 
 /* Human hours: 2.83 → "2h 50m" (decimals confuse people; CSV exports keep the numbers). */
 function fmtH(h){h=Number(h)||0;const neg=h<0?'-':'';h=Math.abs(h);let H=Math.floor(h),M=Math.round((h-H)*60);if(M===60){H++;M=0;}return neg+H+'h'+(M?' '+M+'m':'');}

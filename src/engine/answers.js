@@ -45,9 +45,12 @@ function _ansEditRow(e){return{
 /* ── lookups ──
    The id is deterministic — (checklist, date, question) — so two people submitting at the
    same moment collapse onto one row instead of racing to create duplicates. */
-const _ansId=(clId,date,qId)=>'ans_'+clId+'_'+date+'_'+qId;
-function _ansFor(clId,date,qId){return(DB.tmAnswers||[]).find(a=>a.checklistId===clId&&a.date===date&&a.questionId===qId)||null;}
-function _ansAll(clId,date){return(DB.tmAnswers||[]).filter(a=>a.checklistId===clId&&a.date===date);}
+/* Cases: every lookup funnels through _normD so a One-time checklist reads and writes the SAME
+   run no matter which calendar day the user is looking at. */
+const _normD=(clId,date)=>{const c=clById(clId);return c?effDate(c,date):date;};
+const _ansId=(clId,date,qId)=>'ans_'+clId+'_'+_normD(clId,date)+'_'+qId;
+function _ansFor(clId,date,qId){date=_normD(clId,date);return(DB.tmAnswers||[]).find(a=>a.checklistId===clId&&a.date===date&&a.questionId===qId)||null;}
+function _ansAll(clId,date){date=_normD(clId,date);return(DB.tmAnswers||[]).filter(a=>a.checklistId===clId&&a.date===date);}
 function _clQuestions(c){return((c&&c.questionIds)||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);}
 /* Progress of one run: how many of its questions have a submitted answer. */
 function _ansProgress(c,date){
@@ -56,7 +59,7 @@ function _ansProgress(c,date){
   return{total:qs.length,done,complete:qs.length>0&&done>=qs.length};
 }
 /* Everyone who has contributed an answer to this run, in the order they first did. */
-function _ansContributors(clId,date){
+function _ansContributors(clId,date){date=_normD(clId,date);
   const seen=new Set();const out=[];
   _ansAll(clId,date).slice().sort((a,b)=>String(a.submittedAt||'').localeCompare(String(b.submittedAt||''))).forEach(a=>{
     if(!a.submittedBy||seen.has(a.submittedBy))return;seen.add(a.submittedBy);
@@ -81,6 +84,15 @@ function _clDeadlineLabel(c){
    without one the run is due on its own date. No time means end of day. */
 function _clOverdue(c,date){
   if(!c)return false;
+  if(isCase(c)){
+    // A case has one FINAL deadline. No deadline date -> it is never late.
+    if(caseSub(c))return false;                    // closed cases are done, not late
+    const dd2=_clDeadlineDate(c.id);if(!dd2)return false;
+    const today2=todayISO();
+    if(dd2<today2)return true;
+    if(dd2>today2)return false;
+    return !!(c.scheduleTime&&nowHM()>hm2m(c.scheduleTime));
+  }
   const dd=_clDeadlineDate(c.id)||date;
   const today=todayISO();
   if(dd<today)return true;
@@ -103,6 +115,7 @@ function _ansCanDecide(e){
    Reads the in-progress value out of RUN (the same local draft object the inputs already
    write to), then writes the row and locks it. */
 App._ansSubmit=async(clId,date,qId)=>{
+  date=_normD(clId,date); // cases write to the case date, whatever day is on screen
   const c=clById(clId);if(!c)return;
   const q=(DB.questions||[]).find(x=>x.id===qId);if(!q)return;
   const run=RUN[clId]||{};
@@ -159,6 +172,7 @@ async function _ansUploadPhotos(rec){
 
 /* ── request an edit on a submitted answer ── */
 App._ansEditAsk=(clId,date,qId)=>{
+  date=_normD(clId,date);
   const a=_ansFor(clId,date,qId);if(!a)return;
   if(_ansEditPending(a.id)){toast('An edit request is already waiting on this answer','warn');return;}
   const q=(DB.questions||[]).find(x=>x.id===qId);
@@ -176,6 +190,7 @@ App._ansEditAsk=(clId,date,qId)=>{
     footer:btnG('Cancel','App.closeModal()')+btnP('Send request',`App._ansEditSend('${esc(clId)}','${esc(date)}','${esc(qId)}')`)});
 };
 App._ansEditSend=(clId,date,qId)=>{
+  date=_normD(clId,date);
   const a=_ansFor(clId,date,qId);if(!a)return;
   const reason=($('#ans-edit-why')?.value||'').trim();
   const c=clById(clId);const q=(DB.questions||[]).find(x=>x.id===qId);
@@ -216,6 +231,7 @@ App._ansEditDecide=(editId,action)=>{
 };
 /* An approver can also unlock directly, without the round trip through a request. */
 App._ansUnlock=(clId,date,qId)=>{
+  date=_normD(clId,date);
   if(!(can('checklists','approve')||isAdmin())){toast('You need Checklists → Approve','err');return;}
   const a=_ansFor(clId,date,qId);if(!a||!a.locked)return;
   a.locked=false;a.updatedAt=new Date().toISOString();
@@ -242,6 +258,13 @@ async function _ansLoadWindow(fromISO){
     if(!ans.error)_applyAnswers(_mAns(ans.data),{replaceFrom:fromISO});
     if(!eds.error)DB.tmAnswerEdits=_mAnsEdit(eds.data);
     if(!meta.error){DB.tmMeta={};(meta.data||[]).forEach(r=>{DB.tmMeta[r.checklist_id]={deadlineDate:r.deadline_date||null};});}
+    // Case runs live on their case date, which can be older than the window — fetch those too.
+    const caseDates=[...new Set((DB.checklists||[]).filter(c=>isCase(c)).map(c=>caseDate(c)))].filter(d=>d<fromISO);
+    if(caseDates.length){
+      const extra=await sb.from('tm_answers').select('*').in('run_date',caseDates);
+      if(!extra.error)_applyAnswers(_mAns(extra.data),{});
+    }
+    _qsLoad();
   }catch(e){console.warn('[answers] load skipped:',e&&e.message);}
 }
 async function _ansLoadDate(dateISO){
@@ -262,6 +285,102 @@ function _applyAnswers(rows,opt){
   DB.tmAnswers=[...keep,...rows];
 }
 
+/* ── per-question working status ──
+   Done comes from a submitted answer; everything before that is coordination state the team sets
+   with one tap: In progress, Waiting on client, Waiting on authority. It lives in its own new
+   table (tm_q_status), one row per (checklist, run date, question), last writer wins. This is
+   what turns "any update?" into "we've been waiting on the client's signature for 3 days". */
+const _qsKey=(clId,date,qId)=>clId+'|'+_normD(clId,date)+'|'+qId;
+const QS_LABEL={in_progress:'In progress',waiting_client:'Waiting on client',waiting_authority:'Waiting on authority'};
+function _qStatusOf(clId,date,qId){return(DB.tmQStatus||{})[_qsKey(clId,date,qId)]||null;}
+function _qsDays(st){if(!st||!st.changedAt)return 0;return Math.max(0,Math.floor((Date.now()-new Date(st.changedAt).getTime())/86400000));}
+App._setQStatus=(clId,date,qId,status)=>{
+  date=_normD(clId,date);
+  const key=clId+'|'+date+'|'+qId;
+  DB.tmQStatus=DB.tmQStatus||{};
+  const cur=DB.tmQStatus[key];
+  if(cur&&cur.status===status){ // tapping the active chip clears it back to Not started
+    delete DB.tmQStatus[key];
+    sb.from('tm_q_status').delete().eq('id',key).then(()=>{}).catch(()=>{});
+  }else{
+    DB.tmQStatus[key]={status,changedBy:S.uid,changedAt:new Date().toISOString()};
+    sb.from('tm_q_status').upsert({id:key,checklist_id:clId,run_date:date,question_id:qId,
+      status,changed_by:S.uid,changed_at:new Date().toISOString()},{onConflict:'id'})
+      .then(({error})=>{if(error)_syncErr('question status')(error);}).catch(_syncErr('question status'));
+  }
+  saveDB();rr();
+};
+/* The small badge shown wherever an unanswered question appears. */
+function _qsBadge(clId,date,qId){
+  const st=_qStatusOf(clId,date,qId);if(!st)return'';
+  const days=_qsDays(st);
+  const tone=st.status==='in_progress'
+    ?'background:var(--c-info-soft);color:var(--c-info)'
+    :st.status==='waiting_client'
+    ?'background:#FEF3C7;color:#92400E'
+    :'background:#EDE9FE;color:#5B21B6';
+  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;${tone}">`
+    +esc(QS_LABEL[st.status]||st.status)+(st.status!=='in_progress'&&days>0?' · '+days+'d':'')+'</span>';
+}
+function _qsApply(rows){
+  DB.tmQStatus=DB.tmQStatus||{};
+  (rows||[]).forEach(r=>{DB.tmQStatus[r.id]={status:r.status,changedBy:r.changed_by||null,changedAt:r.changed_at||null};});
+}
+async function _qsLoad(){
+  try{
+    // Recent window + the case dates of every open One-time checklist (they can be months old).
+    const from=new Date(Date.now()-35*86400000).toISOString().slice(0,10);
+    const caseDates=[...new Set((DB.checklists||[]).filter(c=>isCase(c)).map(c=>caseDate(c)))];
+    const qs=[sb.from('tm_q_status').select('*').gte('run_date',from)];
+    if(caseDates.length)qs.push(sb.from('tm_q_status').select('*').in('run_date',caseDates));
+    const rs=await Promise.all(qs);
+    rs.forEach(r=>{if(!r.error)_qsApply(r.data);});
+  }catch(e){console.warn('[q status] load skipped:',e&&e.message);}
+}
+
+/* ── case alerts (called from the deadline loop in main.js; unit-tested directly) ──
+   (a) a question waiting on the client for 3+ days pings whoever created the checklist,
+   once a day; (b) an open case past its final deadline pings the creator and every
+   assignee's manager, once a day. `sent` is the shared cross-device dedup map. */
+function _caseAlerts(c,today,nowM,sent){
+  if(!isCase(c)||(c.status&&c.status!=='Active'))return false;
+  if(caseSub(c))return false;                                   // closed — nothing to chase
+  const cd=caseDate(c);let changed=false;
+  _clQuestions(c).forEach(q=>{
+    const st=_qStatusOf(c.id,cd,q.id);
+    if(!st||st.status!=='waiting_client')return;
+    const days=_qsDays(st);if(days<3)return;
+    const a2=_ansFor(c.id,cd,q.id);if(a2&&a2.response)return;   // answered since — stale row
+    const owner=c.createdBy;if(!owner)return;
+    const wKey='wc_'+today+'|'+c.id+'|'+q.id;
+    if(sent[wKey])return;
+    sent[wKey]=Date.now();changed=true;
+    const cliName=(c.locationIds||[]).map(i=>(DB.locations||[]).find(l=>l.id===i)?.name).filter(Boolean).join(', ')||'the client';
+    notifyEvent('waiting_client_stale',owner,
+      '⏳ "'+q.text+'" on "'+c.name+'" has been waiting on '+cliName+' for '+days+' days','locations',
+      {checklist_name:c.name,question:q.text,client_name:cliName,days:String(days)});
+  });
+  const dd=_clDeadlineDate(c.id);
+  if(dd){
+    const pastDay=dd<today, pastMoment=dd===today&&c.scheduleTime&&nowM>hm2m(c.scheduleTime)+(window.DEADLINE_GRACE_MIN||15);
+    if(pastDay||pastMoment){
+      const cKey='case_'+today+'|'+c.id;
+      if(!sent[cKey]){
+        sent[cKey]=Date.now();changed=true;
+        const prog=_ansProgress(c,cd);
+        const txt='⏰ Case overdue: "'+c.name+'" passed its deadline ('+fmtS(dd)+(c.scheduleTime?' '+c.scheduleTime:'')+') with '+prog.done+'/'+prog.total+' answers in';
+        const targets=new Set([c.createdBy]);
+        (c.assignees||[]).forEach(aid=>{const e=uById(aid);if(e&&e.managerId)targets.add(e.managerId);});
+        targets.forEach(tid=>{if(!tid)return;
+          if(evInApp('submission_late'))notify(tid,txt,'submission','allcl');
+          if(evEmail('submission_late'))sendEmail('submission_late',tid,{checklist_name:c.name,employee_name:'the team'});
+        });
+      }
+    }
+  }
+  return changed;
+}
+
 /* ── checklist meta (the optional deadline date) ── */
 function _tmMetaSave(clId,deadlineDate){
   DB.tmMeta=DB.tmMeta||{};
@@ -277,4 +396,4 @@ window._ansProgress=_ansProgress;window._ansContributors=_ansContributors;
 window._clDeadlineDate=_clDeadlineDate;window._clDeadlineLabel=_clDeadlineLabel;window._clOverdue=_clOverdue;
 window._ansEditPending=_ansEditPending;window._ansEditApproved=_ansEditApproved;window._ansCanDecide=_ansCanDecide;
 window._ansUploadPhotos=_ansUploadPhotos;window._ansLoadWindow=_ansLoadWindow;window._ansLoadDate=_ansLoadDate;
-window._applyAnswers=_applyAnswers;window._tmMetaSave=_tmMetaSave;
+window._applyAnswers=_applyAnswers;window._tmMetaSave=_tmMetaSave;window._normD=_normD;window.QS_LABEL=QS_LABEL;window._qsKey=_qsKey;window._qStatusOf=_qStatusOf;window._qsDays=_qsDays;window._qsBadge=_qsBadge;window._qsApply=_qsApply;window._qsLoad=_qsLoad;window._caseAlerts=_caseAlerts;

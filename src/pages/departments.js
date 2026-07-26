@@ -19,7 +19,7 @@ function myCityScope(){const u=me();return u?userCities(u):[];}
 // Detail-view navigation, shared with the Locations page.
 App._openDept=(id)=>{S.filters.deptSel=id;S.filters.deptTab='users';rr();};
 App._closeDept=()=>{S.filters.deptSel=null;rr();};
-App._openLoc=(id)=>{S.filters.locSel=id;S.filters.locTab='docs';S.filters.docFolder=null;rr();};
+App._openLoc=(id)=>{S.filters.locSel=id;S.filters.locTab='prog';S.filters.docFolder=null;rr();};
 App._closeLoc=()=>{S.filters.locSel=null;rr();};
 App._setDeptTab=(k)=>{S.filters.deptTab=k;rr();};
 App._setLocTab=(k)=>{S.filters.locTab=k;S.filters.docFolder=null;rr();};

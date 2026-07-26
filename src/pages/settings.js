@@ -92,6 +92,7 @@ const EMAIL_EVENTS=[
   {key:'approval_decided', label:'Approval decided',     vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'waiting_client_stale',label:'Blocked on a client 3+ days', vars:'{{user_name}}, {{checklist_name}}, {{question}}, {{client_name}}, {{days}}, {{action_url}}'},
   {key:'escalation',       label:'Escalation raised',    vars:'{{submitter}}, {{checklist_name}}, {{question}}, {{answer}}, {{action_url}}'},
   {key:'announcement',     label:'Announcement',         vars:'{{title}}, {{body}}, {{action_url}}'},
   {key:'ticket_assigned',  label:'Ticket assigned',      vars:'{{user_name}}, {{ticket_title}}, {{action_url}}'},
@@ -108,6 +109,7 @@ function _defaultTemplates(){
     approval_decided: {subject:'Approval update: {{checklist_name}}',          body:'Hi {{user_name}},\n\nYour approval request for {{checklist_name}} has been decided.\n\n{{action_url}}'},
     feedback_received:{subject:'💬 New feedback received',                      body:'Hi {{user_name}},\n\nYou have received new feedback on {{checklist_name}}.\n\n{{action_url}}'},
     deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon. Please complete it before the cutoff.\n\n{{action_url}}'},
+    waiting_client_stale:{subject:'⏳ Still waiting on {{client_name}} — {{days}} days', body:'Hi {{user_name}},\n\n"{{question}}" on {{checklist_name}} has been waiting on the client for {{days}} days. Consider nudging them from the client page.\n\n{{action_url}}'},
     escalation:{subject:'⚠️ Escalation: {{checklist_name}}',                    body:'An escalation was raised on {{checklist_name}}.\n\nQuestion: {{question}}\nAnswer: {{answer}}\nRaised by: {{submitter}}\n\nOpen Evarca to follow up.\n\n{{action_url}}'},
     announcement:{subject:'📣 {{title}}',                                       body:'{{body}}\n\n{{action_url}}'},
     ticket_assigned:{subject:'🎫 Ticket assigned to you: {{ticket_title}}',    body:'Hi {{user_name}},\n\nA ticket has been assigned to you: {{ticket_title}}\n\n{{action_url}}'},
@@ -120,11 +122,11 @@ function _nsDefault(){return{
   inapp_checklist_assigned:true,inapp_submission_submitted:true,
   inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
   inapp_approval_requested:true,inapp_approval_decided:true,
-  inapp_feedback_received:true,inapp_deadline_reminder:true,inapp_escalation:true,inapp_ticket_assigned:true,inapp_ticket_resolved:true,
+  inapp_feedback_received:true,inapp_deadline_reminder:true,inapp_escalation:true,inapp_ticket_assigned:true,inapp_ticket_resolved:true,inapp_waiting_client_stale:true,
   email_checklist_assigned:true,email_submission_submitted:false,
   email_submission_late:true,email_submission_approved:true,email_submission_rejected:true,
   email_approval_requested:true,email_approval_decided:true,
-  email_feedback_received:false,email_deadline_reminder:true,email_escalation:true,email_ticket_assigned:true,email_ticket_resolved:true,
+  email_feedback_received:false,email_deadline_reminder:true,email_escalation:true,email_ticket_assigned:true,email_ticket_resolved:true,email_waiting_client_stale:true,
   templates:{},
 };}
 window._ns=null;
@@ -211,7 +213,7 @@ async function sendEmail(eventType, userId, vars){
     submission_late:'teamview', submission_approved:'mychecklists',
     submission_rejected:'mychecklists', approval_requested:'approvals',
     approval_decided:'mychecklists', /* employee-facing: their submission result lives in My Checklists */ feedback_received:'notifications',
-    deadline_reminder:'mychecklists', escalation:'tickets', announcement:'announcements',
+    deadline_reminder:'mychecklists', waiting_client_stale:'locations', escalation:'tickets', announcement:'announcements',
     ticket_assigned:'tickets', ticket_resolved:'tickets',
   };
   const actionUrl = appUrl + '/#' + (routeMap[eventType]||'');

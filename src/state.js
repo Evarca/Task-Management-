@@ -43,7 +43,7 @@ window.DB={
   //    tmMeta         per-checklist extras this build adds (the optional deadline date)
   tmAnswers:[],tmAnswerEdits:[],tmMeta:{},
   // ── Location documents (new tm_folders / tm_documents tables) ──
-  tmFolders:[],tmDocuments:[],tmClientMeta:{}
+  tmFolders:[],tmDocuments:[],tmClientMeta:{},tmQStatus:{},tmTemplates:[],tmShareLinks:[],tmNudges:[]
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -112,6 +112,10 @@ function loadDB(){
     ['users','departments','locations','checklists','submissions','approvals','feedback','audit','notifications','questions','checklists_deleted','questions_deleted','users_deleted','departments_deleted','locations_deleted','hrmAudit','announcements','tmAnswers','tmAnswerEdits','tmFolders','tmDocuments'].forEach(k=>{if(!DB[k])DB[k]=[];});
     if(!DB.tmMeta||typeof DB.tmMeta!=='object')DB.tmMeta={};
     if(!DB.tmClientMeta||typeof DB.tmClientMeta!=='object')DB.tmClientMeta={};
+    if(!DB.tmQStatus||typeof DB.tmQStatus!=='object')DB.tmQStatus={};
+    if(!Array.isArray(DB.tmTemplates))DB.tmTemplates=[];
+    if(!Array.isArray(DB.tmShareLinks))DB.tmShareLinks=[];
+    if(!Array.isArray(DB.tmNudges))DB.tmNudges=[];
     // OKR v2 migration: drop the retired question-linked OKR model from stale localStorage.
     // Old rows are recognisable by having no metricType (they carried questionId/rollup instead).
     DB.okrs=(DB.okrs||[]).filter(o=>o&&o.metricType);
@@ -254,18 +258,19 @@ function myCls(uid,date){
     return (a.name||'').localeCompare(b.name||'');
   });
 }
-const subFor=(clId,uid,date)=>DB.submissions.find(s=>s.checklistId===clId&&s.userId===uid&&s.date===date);
+const subFor=(clId,uid,date)=>{const c=clById(clId);if(c)date=effDate(c,date);return DB.submissions.find(s=>s.checklistId===clId&&s.userId===uid&&s.date===date);};
 /* A run is SHARED in this build: several assignees each answer different questions of the same
    checklist on the same day, and one submission closes it for all of them. So a completed
    submission by ANY assignee counts for everyone — own submission first (so your own mid-edit
    still wins), then any teammate's completed one. */
 const subForCl=(c,uid,date)=>{
+  date=effDate(c,date); // a case has ONE run date no matter which day you look from
   const own=subFor(c.id,uid,date);
   if(own)return own;
   return DB.submissions.find(s=>s.checklistId===c.id&&s.date===date&&s.status!=='Editing')||null;
 };
 // Any submission for this run regardless of who made it or its state (used by the run guard).
-const runSub=(clId,date)=>DB.submissions.find(s=>s.checklistId===clId&&s.date===date)||null;
+const runSub=(clId,date)=>{const c=clById(clId);if(c)date=effDate(c,date);return DB.submissions.find(s=>s.checklistId===clId&&s.date===date)||null;};
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window.log=log;window.LS_KEY=LS_KEY;window.saveDB=saveDB;window.loadDB=loadDB;window.S=S;window.me=me;window.isAdmin=isAdmin;window._pidOf=_pidOf;window.isSuperU=isSuperU;window.roleName=roleName;window.hasDocAccess=hasDocAccess;window.subTree=subTree;window._mgrOfOn=_mgrOfOn;window._underOn=_underOn;window.isMgr=isMgr;window.visU=visU;window.isHR=isHR;window._canReport=_canReport;window.activeProfile=activeProfile;window.userProfileId=userProfileId;window.userProfile=userProfile;window._ensureHrm=_ensureHrm;window.isDesc=isDesc;window.uById=uById;window.clById=clById;window.locById=locById;window.myCls=myCls;window.subFor=subFor;window.subForCl=subForCl;window.runSub=runSub;
