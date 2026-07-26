@@ -50,7 +50,7 @@ function mkCase(over) {
     frequency: 'One-time', schedule: 'One-time', selectedDays: [], selectedDates: [], customDates: [],
     startDate: DAYS_AGO(5), endDate: null, locationIds: ['cl_a'], assignees: ['ana', 'ben'],
     tasks: [], questionIds: ['q1', 'q2'], questionConfigs: {}, scheduleTime: null,
-    status: 'Active', anyOne: false, createdBy: 'boss',
+    status: 'Active', anyOne: true, createdBy: 'boss',  // shared case — the toggle decides since round 10
   }, over || {});
   W.DB.checklists.push(c); return c;
 }

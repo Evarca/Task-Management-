@@ -215,11 +215,11 @@ function _lazyForRoute(r){
   else if(r==='mychecklists'){_lazyLoadDate('mychecklists');_repliesLoad().then(()=>rr()).catch(()=>{});_qcLoad().then(()=>rr()).catch(()=>{});}
   else if(r==='teamview')_lazyLoadDate('teamview');
   else if(r==='allcl')_lazyLoadDate('allcl');
-  else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoadDate('mychecklists');_lazyCold('subs30');}
+  else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoadDate('mychecklists');_lazyCold('subs30');_billingLoad().then(()=>rr()).catch(()=>{});}
   // Cold windows (older than the boot week) fetch on first open of the tab that needs them.
-  else if(r==='locations'){_qsLoad().then(()=>rr()).catch(()=>{});_qcLoad().then(()=>rr()).catch(()=>{});_repliesLoad().then(()=>rr()).catch(()=>{});}
+  else if(r==='locations'){_qsLoad().then(()=>rr()).catch(()=>{});_repliesLoad().then(()=>rr()).catch(()=>{});_billingLoad().then(()=>rr()).catch(()=>{});} // _billingLoad chains _qcLoad
   else if(r==='audit')_lazyCold('audit');
-  else if(r==='analytics')_lazyCold('subs30');
+  else if(r==='analytics'){_lazyCold('subs30');_billingLoad().then(()=>rr()).catch(()=>{});}
 }
 
 /* ── Realtime (Phase 1 leftover): new notifications for ME appear instantly, no reload.

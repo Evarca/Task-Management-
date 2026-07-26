@@ -69,7 +69,7 @@ function locsPage(){
     // Case progress at a glance: open cases, their average completion, and live blockers.
     const _oc=(DB.checklists||[]).filter(c=>isCase(c)&&c.status!=='Draft'&&(c.locationIds||[]).includes(l.id)&&!caseSub(c));
     let _pctSum=0,_blk=0;
-    _oc.forEach(c=>{const cd=caseDate(c);const pr=_ansProgress(c,cd);_pctSum+=pr.total?pr.done/pr.total:0;
+    _oc.forEach(c=>{const cd=caseDate(c);const pr=caseProg(c);_pctSum+=pr.total?pr.done/pr.total:0;
       _clQuestions(c).forEach(q=>{const a2=_ansFor(c.id,cd,q.id);if(a2&&a2.response!==null&&a2.response!=='')return;
         const st=_qStatusOf(c.id,cd,q.id);if(st&&st.status!=='in_progress')_blk++;});});
     const _avg=_oc.length?Math.round(_pctSum/_oc.length*100):0;
@@ -137,15 +137,22 @@ async function _pubStatusRender(token,fresh){
   if(window._pubFormOpen&&!fresh)return;         // never yank the page out from under a half-written reply
   window._pubT=token;
   if(fresh==='cache'&&!window._pubData)fresh=true; // nothing cached yet -> fall through to a real fetch
-  const wrap=inner=>`<div style="min-height:100vh;background:#F7F6F2;padding:28px 16px;font-family:inherit">
+  const wrap=inner=>{
+    // header carries the COMPANY's own brand (name + logo from the invoice template) — never a
+    // product logo. Falls back to a neutral monogram until the first payload arrives.
+    const _br=(window._pubData&&window._pubData.brand)||{};
+    const _bn=_br.name||'Client status';
+    const _mono=esc(String(_bn).trim().charAt(0).toUpperCase()||'C');
+    return `<div style="min-height:100vh;background:#F7F6F2;padding:28px 16px;font-family:inherit">
     <div style="max-width:640px;margin:0 auto">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-        <img src="/icon-192.png" alt="Evarca" width="38" height="38" style="width:38px;height:38px;border-radius:11px;object-fit:cover" onerror="this.outerHTML='<div style=&quot;width:38px;height:38px;border-radius:11px;background:#15171C;color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px&quot;>E</div>'"/>
-        <div><div style="font-size:15px;font-weight:800;color:#15171C">Evarca</div><div style="font-size:11px;color:#9CA3AF">Live status</div></div>
+        ${_br.logo?`<img src="${esc(_br.logo)}" alt="${esc(_bn)}" style="height:38px;max-width:150px;object-fit:contain;border-radius:8px"/>`
+          :`<div style="width:38px;height:38px;border-radius:11px;background:#15171C;color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px">${_mono}</div>`}
+        <div><div style="font-size:15px;font-weight:800;color:#15171C">${esc(_bn)}</div><div style="font-size:11px;color:#9CA3AF">Live status</div></div>
       </div>
       ${inner}
       <div style="text-align:center;font-size:11px;color:#B8B5AC;margin-top:22px">This page updates automatically. Questions? Reply to your account manager.</div>
-    </div></div>`;
+    </div></div>`;};
   if(!window._pubData)el.innerHTML=wrap('<div style="text-align:center;color:#9CA3AF;padding:60px 0;font-size:14px">Loading your status…</div>');
   let data=null;
   if(fresh==='cache')data=window._pubData;       // opening/closing the respond box: no refetch, no flicker
@@ -159,20 +166,23 @@ async function _pubStatusRender(token,fresh){
     return;
   }
   window._pubData=data;
+  try{document.title=((data.brand&&data.brand.name)?data.brand.name+' — ':'')+'Status';}catch(e){}
   if(window._pubFormOpen&&!fresh)return;         // a form opened while we were fetching
   const cases=Array.isArray(data.cases)?data.cases:[];
   const caseHtml=cases.map(cs=>{
     const steps=Array.isArray(cs.steps)?cs.steps:[];
+    const indiv=cs.any_one===false;                          // individual case: people-based progress
+    const pplT=Number(cs.people_total)||0,pplD=Number(cs.people_done)||0;
     const done=steps.filter(s2=>s2.done).length;
-    const pct=steps.length?Math.round(done/steps.length*100):0;
+    const pct=indiv?(pplT?Math.round(pplD/pplT*100):0):(steps.length?Math.round(done/steps.length*100):0);
     const complete=!!cs.done;
-    const waitingYou=steps.filter(s2=>!s2.done&&s2.waiting==='waiting_client');
+    const waitingYou=indiv?[]:steps.filter(s2=>!s2.done&&s2.waiting==='waiting_client');
     const clId=String(cs.checklist_id||'');
     return `<div style="background:#fff;border:1px solid #ECEDF0;border-radius:16px;box-shadow:0 1px 3px rgba(15,15,15,.04);padding:18px 20px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <span style="font-size:15.5px;font-weight:800;color:#15171C">${esc(cs.name||'')}</span>
         ${complete?'<span style="font-size:10px;font-weight:800;padding:2px 10px;border-radius:99px;background:#DCFCE7;color:#0B7A55">COMPLETED</span>':'<span style="font-size:10px;font-weight:800;padding:2px 10px;border-radius:99px;background:#EEF2FF;color:#4338CA">IN PROGRESS</span>'}
-        <span style="margin-left:auto;font-size:13px;font-weight:800;color:${complete?'#0B7A55':'#374151'}">${done}/${steps.length} · ${pct}%</span>
+        <span style="margin-left:auto;font-size:13px;font-weight:800;color:${complete?'#0B7A55':'#374151'}">${indiv?pplD+'/'+pplT:done+'/'+steps.length} · ${pct}%</span>
       </div>
       <div style="height:8px;border-radius:99px;background:#F3F4F6;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${pct}%;background:${complete?'#22C55E':'#0EA5E9'};border-radius:99px"></div></div>
       ${cs.deadline_date&&!complete?`<div style="font-size:12px;color:#6B7280;margin-bottom:10px">Target completion: <b>${esc(fmtS(String(cs.deadline_date)))}${cs.deadline_time?' · '+esc(cs.deadline_time):''}</b></div>`:''}
@@ -193,7 +203,8 @@ async function _pubStatusRender(token,fresh){
           </div>`;}).join('')}
         ${waitingYou.some(s2=>s2.can_respond)?'<div style="font-size:11px;color:#B45309;margin-top:5px">Tap <b>Respond</b> to reply, attach the documents, or simply confirm — it reaches the team instantly.</div>':''}
       </div>`:''}
-      <div>${steps.map(s2=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0">
+      ${indiv?`<div style="font-size:12px;color:#6B7280;border-top:1px solid #F5F4F0;padding-top:8px">Being completed as individual submissions — <b>${pplD} of ${pplT}</b> received.</div>`:''}
+      <div>${indiv?'':steps.map(s2=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0">
         <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${s2.done?'background:#DCFCE7;color:#0B7A55':'background:#F3F4F6;color:#C8C5BD'}">${s2.done?ic('check','w-3 h-3'):''}</span>
         <span style="flex:1;font-size:13px;font-weight:600;color:${s2.done?'#9CA3AF':'#15171C'}">${esc(s2.label||'')}</span>
         ${s2.replied_at&&!s2.done?`<span title="Received — thank you" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#DBEAFE;color:#1D4ED8">SENT ${new Date(s2.replied_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} ✓</span>`:''}
@@ -350,9 +361,14 @@ function _locProgTab(l){
 
   // ── what the client sent back through the status link ──
   const replies=_repliesFor(l.id);
+  const _rOpen=!!S.filters.locRepliesOpen;
   const repliesCard=replies.length?`<div class="ui-card" style="border-left:3px solid #0EA5E9;padding:10px 14px;margin-bottom:10px">
-    <div style="font-size:12.5px;font-weight:800;margin-bottom:6px">${ic('send','w-4 h-4 inline')} From the client — ${replies.length}</div>
-    ${replies.slice(0,6).map(r=>{
+    <div onclick="S.filters.locRepliesOpen=!S.filters.locRepliesOpen;rr()" role="button" aria-expanded="${_rOpen?'true':'false'}" style="display:flex;align-items:center;gap:8px;cursor:pointer;${_rOpen?'margin-bottom:6px':''}">
+      <span style="font-size:12.5px;font-weight:800">${ic('send','w-4 h-4 inline')} From the client — ${replies.length}</span>
+      ${!_rOpen?`<span style="flex:1;min-width:0;font-size:11.5px;color:var(--c-text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">latest ${esc(_agoLabel(replies[0].submittedAt))}${replies[0].message?' — “'+esc(String(replies[0].message).slice(0,70))+'”':(replies[0].files||[]).length?' — '+(replies[0].files||[]).length+' file(s)':''}</span>`:'<span style="flex:1"></span>'}
+      <span style="color:var(--c-text-3);transition:transform .15s;transform:rotate(${_rOpen?'90':'0'}deg)">${ic('chevR','w-4 h-4')}</span>
+    </div>
+    ${!_rOpen?'':replies.slice(0,12).map(r=>{
       const q=(DB.questions||[]).find(x=>x.id===r.questionId);const c2=clById(r.checklistId);
       return `<div style="padding:6px 0;border-top:1px solid var(--c-border)">
         <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap">
@@ -363,7 +379,7 @@ function _locProgTab(l){
         ${r.message?`<div style="font-size:12px;color:var(--c-text-2);font-style:italic;margin-top:3px;padding-left:2px">"${esc(r.message)}"</div>`:''}
         ${(r.files||[]).length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${(r.files||[]).map(f=>f.doc_id?`<button onclick="App._docDownload('${esc(f.doc_id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">${ic('paperclip','w-3 h-3')} ${esc(String(f.name||'file').slice(0,40))}</button>`:'').join('')}</div>`:''}
       </div>`;}).join('')}
-    <div style="font-size:11px;color:var(--c-text-3);margin-top:5px">Documents land in this client's Documents tab, under “From client”.</div>
+    ${_rOpen?`<div style="font-size:11px;color:var(--c-text-3);margin-top:5px">Documents land in this client's Documents tab, under “From client”.${replies.length>12?' Showing the latest 12 of '+replies.length+'.':''}</div>`:''}
   </div>`:'';
 
   // ── share link (+ per-link switches: respond / tickets / billing summary) ──
@@ -393,7 +409,47 @@ function _locProgTab(l){
 
   // ── one case block ──
   const lastNudge=(qid,cid)=>{const n=(DB.tmNudges||[]).filter(x=>x.clientId===l.id&&(!qid||x.questionId===qid)&&(!cid||x.checklistId===cid)).sort((a,b)=>String(b.sentAt).localeCompare(String(a.sentAt)))[0];return n||null;};
+  /* An INDIVIDUAL case (toggle off): every assignee submits their own copy, so progress is
+     people-based and there are no shared per-step answers to list. */
+  const caseBlockIndiv=c=>{
+    const cd=caseDate(c);
+    const prog=caseProg(c);
+    const pct=prog.total?Math.round(prog.done/prog.total*100):0;
+    const cs=caseSub(c);
+    const dl=_clDeadlineLabel(c);
+    const over=_clOverdue(c,cd);
+    const rows=(c.assignees||[]).map(aid=>{
+      const u=uById(aid);
+      const sub=(DB.submissions||[]).find(x=>x.checklistId===c.id&&x.date===cd&&x.userId===aid&&x.status!=='Editing');
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--c-border)">
+        <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${sub?'background:#DCFCE7;color:#0B7A55':'background:var(--c-surface-2);color:var(--c-text-3)'}">${sub?ic('check','w-3 h-3'):''}</span>
+        <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:${sub?'var(--c-text-2)':'var(--c-text)'}">${esc(u?fullName(u):'Unknown')}</span>
+        ${sub?`<span style="font-size:11px;color:var(--c-text-3)">${sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>`
+            :'<span style="font-size:10px;font-weight:800;padding:1px 8px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-3)">OPEN</span>'}
+      </div>`;}).join('');
+    return `<div class="ui-card" style="margin-bottom:8px;overflow:hidden">
+      <div style="padding:11px 14px 9px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:14.5px;font-weight:800">${esc(c.name)}</span>
+          <span title="The 'Any one assignee' toggle is OFF — each person submits their own copy" style="font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-2)">INDIVIDUAL</span>
+          ${cs?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#DCFCE7;color:#0B7A55">COMPLETED ${cs.submittedAt?new Date(cs.submittedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</span>`
+            :over?'<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#FEE2E2;color:#B91C1C">OVERDUE</span>'
+            :'<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#EEF2FF;color:#4338CA">OPEN</span>'}
+          <span style="margin-left:auto;font-size:12px;font-weight:800;color:${pct===100?'#0B7A55':'var(--c-text-2)'}">${prog.done}/${prog.total} submitted · ${pct}%</span>
+        </div>
+        <div style="height:7px;border-radius:99px;background:var(--c-surface-2);overflow:hidden;margin-bottom:6px"><div style="height:100%;width:${pct}%;border-radius:99px;background:${cs?'#22C55E':over?'#EF4444':'#0EA5E9'};transition:width .3s"></div></div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--c-text-3)">
+          <span>opened ${fmtS(caseDate(c))}</span>
+          ${dl?`<span style="${over&&!cs?'color:#B91C1C;font-weight:700':''}">due ${esc(dl)}</span>`:''}
+          <span>each of the ${(c.assignees||[]).length} assignees submits their own copy</span>
+          ${canBillView()&&_runUtilized(c.id,cd)>0?`<span title="Σ per-step costs on this case">utilized <b style="color:var(--c-text-2)">${esc(fmtMoney(_runUtilized(c.id,cd),_cliCurrency(l.id)))}</b></span>`:''}
+        </div>
+      </div>
+      <div style="padding:2px 14px 10px">${rows}</div>
+    </div>`;
+  };
   const caseBlock=c=>{
+    if(!isShared(c))return caseBlockIndiv(c);
     const cd=caseDate(c);
     const qs=_clQuestions(c);
     const prog=_ansProgress(c,cd);
@@ -561,6 +617,7 @@ function _locBillTab(l){
         <span style="margin-left:auto;display:inline-flex;gap:6px">
           <button onclick="App._invView('${esc(v.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">${ic('eye','w-3 h-3')} View / print</button>
           ${v.status!=='Void'&&manage?`<button onclick="App._invVoid('${esc(v.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px;color:var(--c-danger-ink)">Void</button>`:''}
+          ${manage?`<button onclick="App._invDel('${esc(v.id)}')" aria-label="Delete invoice" title="Delete invoice" style="width:26px;height:26px;display:grid;place-items:center;border-radius:7px;color:var(--c-danger-ink);background:transparent;border:none;cursor:pointer">${ic('trash','w-3.5 h-3.5')}</button>`:''}
         </span>
       </div>`).join('')
     :'<div style="padding:16px;font-size:12.5px;color:var(--c-text-3)">No invoices yet. Record a payment (an invoice can be raised in the same step), or “Generate invoice” for any amount.</div>'}
@@ -748,6 +805,16 @@ if(!confirm('Delete "'+l.name+'"?'))return;if(!DB.locations_deleted)DB.locations
 // (mirrors the dept-clear pattern; u.hrm syncs via the user_hrm table, so cleared ids propagate on next sync).
 // M4: _ensureHrm also self-heals a stale locationId on devices that haven't received this clear yet.
 DB.users.forEach(u=>{if(u.hrm&&u.hrm.locationId===id)u.hrm.locationId=null;});
+// R10: take the client's money records with it — otherwise the Company dashboard keeps
+// counting engagements/payments/invoices for a client that no longer exists anywhere.
+if(DB.tmBilling&&DB.tmBilling[id])delete DB.tmBilling[id];
+DB.tmPayments=(DB.tmPayments||[]).filter(p=>p.clientId!==id);
+DB.tmInvoices=(DB.tmInvoices||[]).filter(v=>v.clientId!==id);
+if(canBill()){ // server-side cleanup needs Billing — manage; without it the strip's ghost-guard covers display
+  sb.from('tm_billing').delete().eq('client_id',id).then(()=>{}).catch(()=>{});
+  sb.from('tm_payments').delete().eq('client_id',id).then(()=>{}).catch(()=>{});
+  sb.from('tm_invoices').delete().eq('client_id',id).then(()=>{}).catch(()=>{});
+}
 saveDB();render();toast('Deleted','warn');sb.from('locations').delete().eq('id',id).then(({error})=>{if(error)console.error('delLoc:',error.message);}).catch(()=>{});};
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */

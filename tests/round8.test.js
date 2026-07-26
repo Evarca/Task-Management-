@@ -61,7 +61,7 @@ function mkCase(over) {
     frequency: 'One-time', schedule: 'One-time', selectedDays: [], selectedDates: [], customDates: [],
     startDate: DAYS_AGO(5), endDate: null, locationIds: ['cl_a'], assignees: ['ana'],
     tasks: [], questionIds: ['q1', 'q2'], questionConfigs: {}, scheduleTime: null,
-    status: 'Active', anyOne: false, createdBy: 'boss',
+    status: 'Active', anyOne: true, createdBy: 'boss',  // shared case — the toggle decides since round 10
   }, over || {});
   W.DB.checklists.push(c); return c;
 }
@@ -391,6 +391,7 @@ describe('7 — the reply on the team side', () => {
       kind: 'document', message: 'Passport copies attached', files: [{ name: 'passport.pdf', doc_id: 'doc_x', path: 'client-uploads/t/1_passport.pdf', size: 12345 }],
       submittedAt: HOURS_AGO(2) });
     expect(W._replyForQ(c.id, TODAY, 'q1').kind).toBe('document');   // date-normalised lookup
+    W.S.filters.locRepliesOpen = true;                                // round 10: the card collapses by default
     const html = W._locProgTab(W.DB.locations[0]);
     expect(html).toContain('From the client');
     expect(html).toContain('CLIENT REPLIED');

@@ -19,13 +19,18 @@ login accounts** as the full Evarca deployment.
 
 ## How a checklist run works
 
-**"Any one assignee can complete" decides the run model** (`isShared` in `src/ui/helpers.js`):
+**"Any one assignee can complete" decides the run model** (`isShared` in `src/ui/helpers.js`) —
+since round 10 it decides it EVERYWHERE, One-time client cases included:
 
-- **Toggle ON, or any One-time client case** → a SHARED run, described below.
+- **Toggle ON** → a SHARED run, described below.
 - **Toggle OFF** → an INDIVIDUAL run: every assignee fills in and submits their **own copy** —
   plain inputs, one Submit button, a teammate's submission never closes yours. No per-question
   submit, no shared locks, no waiting-status chips (those are shared-run concepts). Escalations
-  still fire from each person's own submission.
+  still fire from each person's own submission. An individual CASE closes only when **every**
+  assignee has submitted; its progress is people-based (client file, clients list and the
+  status link all show "n of m submissions"). Per-question costs stay available on the
+  individual card. Existing One-time checklists were stamped `any_one=true` by migration —
+  they had always run shared, so nothing in flight changed behaviour.
 
 A shared run is **one thing per checklist per run**, not one per person.
 
@@ -153,6 +158,26 @@ enforces the same rule server-side (`_can('locations','billing') OR _is_elevated
 gate is real even against the raw API. The one deliberate exception: the per-question **cost**
 can also be written by that run's assignees (`tm_q_costs` RLS checks the checklist's assignee
 list) — entering what a step cost is part of doing the step.
+
+## Round 10
+
+- **The toggle rules cases too** (see "How a checklist run works" above) — the old
+  "a One-time case is always shared" special case is gone, with a data migration stamping
+  existing cases `any_one=true` so live work kept its exact behaviour.
+- **Company-dashboard money fixed and live**: *Outstanding* is now summed **per client**
+  (an overpaid client can no longer mask another's dues), and `_billingLoad()` re-runs
+  whenever Company, My Day or a client file opens (and on tab refocus), so payments recorded
+  on another device show up without a reload.
+- **"From the client" collapses** — one summary line (count + latest) by default; tap to
+  expand the last 12.
+- **Invoices can be deleted** by Billing — manage holders (RLS updated to match); Void stays
+  for anything already sent out.
+- **Three charts removed** from Company: department performance, the tickets pie (the ticket
+  page's own stat cards cover it) and submissions-by-weekday. Status breakdown, the
+  submissions trend and Compliance stay.
+- **The status link wears the COMPANY's brand** — the logo + name from the invoice template
+  (returned by the RPC as `brand`), a neutral monogram until one is configured. The product's
+  own icon is gone from the client-facing page, and the tab title follows the company name.
 
 ## Round 9 — the polish round
 
@@ -444,7 +469,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 281 assertions in ten files:
+`npm test` runs 300 assertions in eleven files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every
@@ -487,6 +512,12 @@ hover. Theme lives in `src/ui/charts.js`.
   server-deletion reconcile in `_qsLoad`, view-vs-manage billing gating on the tab and the
   clients list, the two Billing events with honoured switches and actor-skipping fan-out, and
   the dashboard strip + "Clients responded" card visibility.
+- **`tests/round10.test.js`** — the toggle deciding for cases (isShared / all-must-submit
+  caseSub / people-based caseProg), the INDIVIDUAL client-file block and list column, per-client
+  Outstanding math, billing loaders wired into route changes, the collapsible replies card,
+  invoice delete (manage-gated, view-only refused and button hidden), the pruned charts, the
+  company brand + people-progress + suppressed step list on the public page, and the cost box
+  on individual cards.
 
 Both matter more than usual here, because cross-file references resolve through `window` at call
 time — `vite build` will happily build an app whose buttons throw when clicked.

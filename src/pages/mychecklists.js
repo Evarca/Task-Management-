@@ -92,7 +92,9 @@ function homeDash(){
   // ── TODAY'S CHECKLISTS: where each one actually stands, question by question ──
   const myToday=dayCls.map(c=>{
     const prog=_ansProgress(c,today);
-    const s2=runSub(c.id,today);
+    // R10: on a personal list an INDIVIDUAL run counts as done only when MY copy is in —
+    // a teammate's submission never closes yours (subForCl already encodes both models).
+    const s2=isShared(c)?runSub(c.id,today):subForCl(c,S.uid,today);
     const submitted=!!s2&&s2.status!=='Editing';
     return{c,prog,submitted,overdue:!submitted&&_clOverdue(c,today),pct:prog.total?Math.round(prog.done/prog.total*100):(submitted?100:0)};
   });
@@ -368,6 +370,7 @@ function _qCardOwn(c,q,date){
     ${hdr2}
     ${inputHtml}
     <textarea oninput="App._setQRComment('${c.id}','${q.id}',this.value)" placeholder="${q.comment?'Comment (required)…':'Add a comment (optional)…'}" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1.5px solid ${q.comment?'#FCA5A5':'#E5E7EB'};border-radius:9px;font-size:12px;resize:none;outline:none;font-family:inherit;background:#fff" rows="2">${esc(qr.comment||'')}</textarea>
+  ${_qCostRow(c,q,date)}
   </div>`;
 }
 
@@ -389,6 +392,7 @@ function _qCard(c,q,date,runSubmitted){
           ${escd?'<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#FEE2E2;color:#B91C1C">ESCALATED — ticket raised</span>':''}
         </div>
         ${r.comment?`<div style="margin-top:6px;font-size:12px;color:#6B7280;font-style:italic;padding:5px 8px;background:#fff;border-radius:7px">"${esc(r.comment)}"</div>`:''}
+        ${_qCostRow(c,q,date)}
       </div>`;
     }
     return _qCardOwn(c,q,date);

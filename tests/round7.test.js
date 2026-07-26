@@ -131,9 +131,11 @@ describe('shared (toggle ON) and cases keep the round-2 model', () => {
     expect(W.subForCl(c, 'ben', TODAY)).toBeTruthy();      // closed for Ben too
   });
 
-  it('a One-time case is shared even with the toggle off', () => {
-    const c = mkCl({ id: 'case1', frequency: 'One-time', schedule: 'One-time', startDate: TODAY, anyOne: false });
-    expect(W.isShared(c)).toBe(true);
+  it('the toggle decides for One-time cases too (changed in round 10)', () => {
+    const on  = mkCl({ id: 'caseA', frequency: 'One-time', schedule: 'One-time', startDate: TODAY, anyOne: true });
+    const off = mkCl({ id: 'caseB', frequency: 'One-time', schedule: 'One-time', startDate: TODAY, anyOne: false });
+    expect(W.isShared(on)).toBe(true);    // ON: one shared run
+    expect(W.isShared(off)).toBe(false);  // OFF: each assignee submits their own copy — even on a case
   });
 
   it('per-answer submit is refused on an individual checklist', async () => {

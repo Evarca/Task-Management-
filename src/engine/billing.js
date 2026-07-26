@@ -299,6 +299,20 @@ App._invGenGo=async(locId,payId)=>{
   saveDB();closeModal();toast('Invoice '+number+' created');rr();
   App._invView(v.id);
 };
+App._invDel=(invId)=>{
+  if(!canBill())return toast('You need Clients → Billing — manage','err');
+  const v=(DB.tmInvoices||[]).find(x=>x.id===invId);if(!v)return;
+  confirmModal({title:'Delete invoice '+esc(v.number)+'?',body:'Removes it permanently from the list. Its number is <b>not</b> reused. If it was already sent to the client, prefer <b>Void</b> — that keeps it on file, watermarked.',
+    confirmLabel:'Delete invoice',danger:true,onConfirm:`App._invDelGo('${esc(invId)}')`});
+};
+App._invDelGo=(invId)=>{
+  if(!canBill())return;
+  const v=(DB.tmInvoices||[]).find(x=>x.id===invId);if(!v)return;
+  DB.tmInvoices=(DB.tmInvoices||[]).filter(x=>x.id!==invId);
+  _delRow('tm_invoices',invId,'invoice');
+  log(fullName(me()),'Deleted invoice',v.number+' · '+fmtMoney(v.total,v.currency));
+  saveDB();closeModal();toast('Invoice '+v.number+' deleted','warn');rr();
+};
 App._invVoid=(invId)=>{
   if(!canBill())return toast('You need Clients → Billing & invoices','err');
   const v=(DB.tmInvoices||[]).find(x=>x.id===invId);if(!v||v.status==='Void')return;

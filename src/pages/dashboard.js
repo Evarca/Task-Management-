@@ -14,9 +14,10 @@ function _clOverview(date){
     if(seesAll)return true;
     return c.createdBy===S.uid||(c.assignees||[]).includes(S.uid)||(c.assignees||[]).some(a=>f(a));
   }).map(c=>{
-    const prog=_ansProgress(c,d);
+    const prog=(isCase(c)&&!isShared(c))?caseProg(c):_ansProgress(c,d);
     const sub=runSub(c.id,d);
-    const submitted=!!sub&&sub.status!=='Editing';
+    // R10: an INDIVIDUAL case is only "submitted" when every assignee has handed in their copy
+    const submitted=(isCase(c)&&!isShared(c))?!!caseSub(c):(!!sub&&sub.status!=='Editing');
     const overdue=!submitted&&_clOverdue(c,d);
     const state=submitted?(sub.status==='Pending Approval'?'Awaiting approval':'Submitted')
       :overdue?'Overdue':prog.done?'In progress':'Not started';

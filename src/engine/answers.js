@@ -417,7 +417,7 @@ function _caseAlerts(c,today,nowM,sent){
       const cKey='case_'+today+'|'+c.id;
       if(!sent[cKey]){
         sent[cKey]=Date.now();changed=true;
-        const prog=_ansProgress(c,cd);
+        const prog=caseProg(c);
         const txt='⏰ Case overdue: "'+c.name+'" passed its deadline ('+fmtS(dd)+(c.scheduleTime?' '+c.scheduleTime:'')+') with '+prog.done+'/'+prog.total+' answers in';
         const targets=new Set([c.createdBy]);
         (c.assignees||[]).forEach(aid=>{const e=uById(aid);if(e&&e.managerId)targets.add(e.managerId);});

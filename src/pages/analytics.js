@@ -116,16 +116,16 @@ function _reportScopeIds(){const s=new Set(scopedUsers('reports').map(u=>u.id));
 /* ── Billing at a glance (round 9): only for people who can see money ── */
 function _billingStrip(){
   if(typeof canBillView!=='function'||!canBillView())return'';
-  const ids=Object.keys(DB.tmBilling||{});
-  const anyPay=(DB.tmPayments||[]).length;
-  if(!ids.length&&!anyPay)return'';
+  const ids=Object.keys(DB.tmBilling||{}).filter(id=>locById(id));   // ghost-guard: deleted clients don't count
+  const pays=(DB.tmPayments||[]).filter(p=>locById(p.clientId));
+  if(!ids.length&&!pays.length)return'';
   const ym=todayISO().slice(0,7);
-  let totalV=0,paidV=0;
-  ids.forEach(id=>{const b=DB.tmBilling[id];totalV+=Number(b.total)||0;});
-  (DB.tmPayments||[]).forEach(p=>{paidV+=Number(p.amount)||0;});
-  const outstanding=Math.max(0,totalV-paidV);
-  const collectedM=(DB.tmPayments||[]).filter(p=>String(p.paidOn||'').slice(0,7)===ym).reduce((a,p)=>a+(Number(p.amount)||0),0);
-  const invsM=(DB.tmInvoices||[]).filter(v=>v.status!=='Void'&&String(v.issuedOn||'').slice(0,7)===ym);
+  let totalV=0,paidV=0,outstanding=0;
+  ids.forEach(id=>{const b=DB.tmBilling[id];totalV+=Number(b.total)||0;
+    outstanding+=Math.max(0,(Number(b.total)||0)-_cliPaid(id));});   // per client — an overpaid one never hides another's dues
+  pays.forEach(p=>{paidV+=Number(p.amount)||0;});
+  const collectedM=pays.filter(p=>String(p.paidOn||'').slice(0,7)===ym).reduce((a,p)=>a+(Number(p.amount)||0),0);
+  const invsM=(DB.tmInvoices||[]).filter(v=>v.status!=='Void'&&String(v.issuedOn||'').slice(0,7)===ym&&locById(v.clientId));
   const cur=_invDefaults().currency||'AED';
   const tile=(lbl,val,color)=>`<div onclick="S.route='locations';render()" style="flex:1;min-width:150px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;box-shadow:var(--sh-sm);padding:10px 14px;cursor:pointer">
     <div style="font-size:9.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em">${lbl}</div>
@@ -149,7 +149,7 @@ function _clientCasesSection(){
     let pctSum=0,blocked=0,over=0,nextDl=null;
     open.forEach(c=>{
       const cd=caseDate(c);
-      const pr=_ansProgress(c,cd);pctSum+=pr.total?pr.done/pr.total:0;
+      const pr=caseProg(c);pctSum+=pr.total?pr.done/pr.total:0;
       if(_clOverdue(c,cd))over++;
       const dl=_clDeadlineDate(c.id);
       if(dl){if(!nextDl||dl<nextDl)nextDl=dl;
@@ -371,12 +371,9 @@ function analyticsPage(){
   <div class="achart-grid" style="margin-bottom:14px">
     <div style="${_cc}"><div class="fd" style="${_ct}">Status breakdown</div><div style="position:relative;height:230px"><canvas id="aChartStatus" data-chart="status"></canvas></div></div>
     <div style="${_cc}"><div class="fd" style="${_ct}">Submissions over time</div><div style="position:relative;height:230px"><canvas id="aChartTrend" data-chart="submissions-over-time"></canvas></div></div>
-    <div style="${_cc}"><div class="fd" style="${_ct}">Department performance</div><div style="position:relative;height:230px"><canvas id="aChartDept" data-chart="department"></canvas></div></div>
-    <div style="${_cc}"><div class="fd" style="${_ct}">Tickets</div><div style="position:relative;height:230px"><canvas id="aChartTickets" data-chart="tickets"></canvas></div></div>
   </div>
   <div class="achart-grid" style="margin-bottom:14px">
     <div style="${_cc}"><div class="fd" style="${_ct}">Compliance</div>${(compliantN+nonCompliantN)?`<div style="position:relative;height:210px"><canvas id="aChartCompliance" data-chart="compliance"></canvas></div>`:`<div style="height:210px;display:grid;place-items:center;font-size:12.5px;color:var(--c-text-3);text-align:center;padding:0 20px">No submitted checklists in this range yet.<br/>Compliance appears once work is submitted.</div>`}</div>
-    <div style="${_cc}"><div class="fd" style="${_ct}">Submissions by weekday</div><div style="position:relative;height:210px"><canvas id="aChartWeekday" data-chart="weekday"></canvas></div></div>
   </div>
   ${typeof _clOverviewTable==='function'?_clOverviewTable(today,{title:"Today's checklists"}):''}
   `:''}
