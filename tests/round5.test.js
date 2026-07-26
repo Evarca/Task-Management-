@@ -199,12 +199,14 @@ describe('3 — the Progress tab answers the phone call', () => {
     expect(html).not.toContain('Open cases');
   });
 
-  it('nudging queues the email and records it', () => {
+  it('nudging asks in-app (no browser dialog), then queues the email and records it', () => {
     const c = mkCase();
     W.DB.tmQStatus[W._qsKey(c.id, TODAY, 'q2')] = { status: 'waiting_client', changedBy: 'ana', changedAt: new Date().toISOString() };
-    const realConfirm = W.confirm; W.confirm = () => true;
-    W.App._nudgeClient('cl_a', c.id, 'q2');
-    W.confirm = realConfirm;
+    W.App._nudgeClient('cl_a', c.id, 'q2');           // opens the confirm dialog
+    expect(document.body.innerHTML).toContain('Nudge the client?');
+    expect(document.body.innerHTML).toContain('priya@acme.example');
+    W.App.closeModal();
+    W.App._nudgeClientGo('cl_a', c.id, 'q2');         // what the confirm button runs
     expect(W.DB.tmNudges.length).toBe(1);
     expect(W.DB.tmNudges[0].toEmail).toBe('priya@acme.example');
     expect(W.DB.tmNudges[0].note).toBe('MOA signed?');
@@ -232,9 +234,10 @@ describe('4 — the client status link', () => {
     const html = W._locProgTab(W.DB.locations[0]);
     expect(html).toContain('#status/' + link.token);
     expect(html).toContain('Revoke');
-    const realConfirm = W.confirm; W.confirm = () => true;
-    W.App._shareRevoke(link.token);
-    W.confirm = realConfirm;
+    W.App._shareRevoke(link.token);                   // opens the confirm dialog
+    expect(document.body.innerHTML).toContain('Revoke this link?');
+    W.App.closeModal();
+    W.App._shareRevokeGo(link.token);                 // what the confirm button runs
     expect(link.enabled).toBe(false);
     expect(W._locProgTab(W.DB.locations[0])).toContain('Create link');
   });
@@ -271,6 +274,62 @@ describe('4 — the client status link', () => {
     await W._pubStatusRender('deadtoken123456789');
     W.sb.rpc = realRpc;
     expect(document.getElementById('app').innerHTML).toContain('no longer active');
+  });
+});
+
+/* ═══ 4b — dry-run regressions (found live in Chrome, fixed) ═══ */
+describe('4b — bugs the dry run caught', () => {
+  it('a question can live in a department with no sub-departments', () => {
+    W.DB.departments.push({ id: 'd_bs', name: 'Business Setup', parentId: null }); // no children
+    W.App._editQuestion(null);
+    document.getElementById('qed-text').value = 'Bank account opened?';
+    W._QED.type = 'yesno';
+    W._QED.department = 'Business Setup';
+    W._QED.subDepartment = '';
+    W.App._saveQuestion();
+    const q = W.DB.questions.find(x => x.text === 'Bank account opened?');
+    expect(q).toBeTruthy();
+    expect(q.isPublic).toBe(true);                    // a shared bank shares by default now
+    // ...but a department WITH children still requires picking one
+    W.DB.departments.push({ id: 'd_bs2', name: 'BS Child', parentId: 'd_bs' });
+    W.App._editQuestion(null);
+    document.getElementById('qed-text').value = 'Second question?';
+    W._QED.type = 'yesno';
+    W._QED.department = 'Business Setup'; W._QED.subDepartment = '';
+    W.App._saveQuestion();
+    expect(W.DB.questions.some(x => x.text === 'Second question?')).toBe(false);
+    W.App.closeModal(); W._QED = null;
+  });
+
+  it('a pending deadline date survives the editor re-rendering (save-as-template)', () => {
+    W.App.editCl(null);
+    W.CLD.name = 'T'; W.CLD.questionIds = ['q1'];
+    document.getElementById('cn-ddate').value = '2026-08-15';
+    W._snapshotCLD();                                  // what every re-render path calls first
+    expect(W.CLD._deadlineDate).toBe('2026-08-15');
+    W._renderClModal(false);                           // re-render, as _tplSave does
+    expect(document.getElementById('cn-ddate').value).toBe('2026-08-15');
+    W.App.closeModal(); W.CLD = null;
+  });
+
+  it('All results shows the partial run for an open case, not "No submission"', () => {
+    const c = mkCase();
+    answer(c, 'q1', 'ana');
+    W.DB.tmQStatus[W._qsKey(c.id, TODAY, 'q2')] = { status: 'waiting_client', changedBy: 'ana', changedAt: new Date().toISOString() };
+    const html = W._roResponses(c, null, W.caseDate(c));
+    expect(html).not.toContain('No submission');
+    expect(html).toContain('1/2 answered');
+    expect(html).toContain('Ana Adams');
+    expect(html).toContain('Waiting on client');
+    // a truly untouched day still says so
+    const c2 = mkCase({ id: 'case2', name: 'Empty', questionIds: ['q1'] });
+    expect(W._roResponses(c2, null, W.caseDate(c2))).toContain('No submission');
+  });
+
+  it('the lazy loaders re-render after clearing their loading flag (no stuck skeleton)', () => {
+    const src = String(W._lazyLoad);
+    const fin = src.slice(src.indexOf('finally'));
+    expect(fin).toContain('rr()');                     // rr fires with the flag already cleared
   });
 });
 

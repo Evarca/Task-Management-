@@ -21,7 +21,7 @@ const PERM_GROUPS=['Dashboards & Inbox','Work & Content','People & Org','Adminis
    for it are copied through untouched on save — but keeping the full list also means _seedRoleProfiles
    can never re-seed a built-in role with a narrower permission set than the platform expects.
    TM_AREAS is what the editor RENDERS; resolution (can/scopeOf) always uses the full list. */
-const TM_AREAS=['dashboard','analytics','approvals','teamview','checklists','allChecklists','questions','tickets','announcements','employees','hierarchy','locations','departments','audit','settings','accessControl'];
+const TM_AREAS=['dashboard','analytics','approvals','teamview','checklists','allChecklists','questions','tickets','employees','hierarchy','locations','departments','audit','settings','accessControl'];
 /* Actions PERM_AREAS defines that NOTHING in this build checks. They stay in PERM_AREAS (and in a
    saved bundle) so the wider platform keeps them, but the editor must not offer a switch that
    changes nothing — a permission you can turn on and off with no effect is worse than no switch.

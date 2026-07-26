@@ -143,7 +143,7 @@ App.saveDept=(id)=>{if(id?!can('departments','edit'):!can('departments','create'
   sb.from('departments').upsert({id:obj.id,name:obj.name,parent_id:obj.parentId||null},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('department')(error);}).catch(_syncErr('department'));};
 App.delDept=(id)=>{if(!can('departments','delete'))return toast('You need Departments → Delete','err');const d=DB.departments.find(x=>x.id===id);if(!d)return;
   // Referential-integrity guard: a department with sub-departments, people, checklists or targeted
-  // announcements can't be deleted until those links are moved/removed (the old cascade is gone).
+  // linked records can't be deleted until those links are moved/removed (the old cascade is gone).
   if(!guardDelete('department',id,'"'+d.name+'"'))return;
   const kids=subDepts(id); // empty by now — kept so the tombstone loop below stays byte-compatible
   if(!confirm('Delete "'+d.name+'"?'))return;

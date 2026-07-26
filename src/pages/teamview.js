@@ -11,22 +11,9 @@ function teamViewPage(){
     const directReports=DB.users.filter(u=>u.managerId===S.uid&&u.id!==S.uid);
     const orgWide=isAdmin()||scopeOf('employees')==='everyone'; // R15: the role's employees scope decides
     let team=orgWide?DB.users.filter(u=>u.id!==S.uid&&u.status==='Active'):directReports; // include super admins
-    /* Client filter: show the people who are actually assigned to a checklist run for that
-       client — the only link between a person and a client in this build. */
-    const _tvC=S.filters.tvClient||'';
-    if(_tvC){
-      const ids=new Set((DB.checklists||[]).filter(c=>matchesClient(clientIdsOf(c),_tvC)).flatMap(c=>c.assignees||[]));
-      team=team.filter(u=>ids.has(u.id));
-    }
-    const _tvBar=filterBar(
-       filterLabel('Filter')
-      +clientFilter('tvClient',FILTER_SEL_ST)
-      +(_tvC?filterClear(['tvClient']):'')
-      +filterCount(team.length+' '+(team.length===1?'person':'people')));
-    if(!team.length)return`<div class="fade">${hdr('Team','Live checklist status of your team')}${_tvBar}${empty('users',_tvC?'Nobody works on that client':'No team members yet',_tvC?'No checklist for that client is assigned to your team.':'Nobody reports to you. Ask an admin to set you as someone\'s manager in Users, or check Access Control → Team view.')}</div>`;
+    if(!team.length)return`<div class="fade">${hdr('Team','Live checklist status of your team')}${empty('users','No team members yet','Nobody reports to you. Ask an admin to set you as someone\'s manager in Users, or check Access Control → Team view.')}</div>`;
     return`<div class="fade">
       ${hdr('Team','Your people and every checklist — one place')}
-      ${_tvBar}
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
         ${team.map(u=>{
           const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;

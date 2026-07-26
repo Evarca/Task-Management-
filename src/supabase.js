@@ -130,8 +130,6 @@ function _pushNotifKinds(){
     .then(({error})=>{if(error)_syncErr('notification switches')(error);}).catch(_syncErr('notification switches'));
 }
 /* ── Announcements (PHASE4b) — previously localStorage-only; now a real table. ── */
-function _mAnn(rows){return(rows||[]).map(a=>({id:a.id,title:a.title||'',body:a.body||'',deptTarget:a.dept_target||null,locTarget:a.loc_target||null,createdBy:a.created_by||null,createdAt:a.created_at}));}
-function _annRow(a){return{id:a.id,title:a.title||'',body:a.body||'',dept_target:a.deptTarget||null,loc_target:a.locTarget||null,created_by:a.createdBy||null,created_at:a.createdAt||new Date().toISOString()};}
 /* ── Drafts (PHASE4b) — per-user cross-device saves for checklist runs & OKR check-ins. ── */
 function _mDraft(rows){return(rows||[]).map(d=>({id:d.id,userId:d.user_id,kind:d.kind,refId:d.ref_id,date:d.date||null,payload:d.payload||{},updatedAt:d.updated_at}));}
 function _draftRow(d){return{id:d.id,user_id:d.userId,kind:d.kind,ref_id:d.refId,date:d.date||null,payload:d.payload||{},updated_at:d.updatedAt||new Date().toISOString()};}
@@ -162,9 +160,9 @@ async function _lazyLoad(kind){
     else if(kind==='approvals'){const{data,error}=await sb.from('approvals').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyApprovals(data);}
     else if(kind==='notifications'){const{data,error}=await sb.from('notifications').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyNotifications(data);}
     else if(kind==='feedback'){const{data,error}=await sb.from('feedback').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyFeedback(data);}
-    saveDB();rr();
+    saveDB();
   }catch(e){console.warn('[lazyLoad]',kind,e.message);}
-  finally{clearTimeout(_loadTO);_tabLoading[kind]=false;_syncBar(_anyLoading());}
+  finally{clearTimeout(_loadTO);_tabLoading[kind]=false;_syncBar(_anyLoading());try{rr();}catch(e){}}
 }
 async function _lazyLoadDate(view){
   if(!S.uid||document.visibilityState==='hidden')return;
@@ -179,9 +177,9 @@ async function _lazyLoadDate(view){
     const{data,error}=await sb.from('submissions').select('*').eq('date',d).order('submitted_at',{ascending:false});
     if(!error)_applySubmissions(data,{merge:true});
     await _ansLoadDate(d);
-    saveDB();rr();
+    saveDB();
   }catch(e){console.warn('[lazyLoadDate]',e.message);}
-  finally{_tabLoading[key]=false;_syncBar(_anyLoading());}
+  finally{_tabLoading[key]=false;_syncBar(_anyLoading());try{rr();}catch(e){}}
 }
 /* R7 EGRESS ("cold archive"): older-than-a-week data loads ONLY when its tab is opened.
    Each cold load runs once per session (guarded), shows the sync bar, and MERGES into local
@@ -423,10 +421,9 @@ async function loadFromSB(){
   _shareLoad().then(()=>{rr();}).catch(()=>{});
   _nudgeLoad().then(()=>{rr();}).catch(()=>{});
 
-  // ── Announcements + personal drafts (defensive targeted-load pattern: a missing or
+  // ── Personal drafts (defensive targeted-load pattern: a missing or
   //    RLS-locked table logs a warning and leaves the local array as-is). ──
-  [['announcements','announcements',(r)=>_mAnn(r).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))),null],
-   ['drafts','drafts',_mDraft,(q)=>q.eq('user_id',S.uid)]].forEach(([tbl,key,map,scope])=>{
+  [   ['drafts','drafts',_mDraft,(q)=>q.eq('user_id',S.uid)]].forEach(([tbl,key,map,scope])=>{
     let _q=sb.from(tbl).select('*');if(scope)_q=scope(_q);
     _q.then(({data,error})=>{
       if(error){console.warn('['+tbl+'] load skipped:',error.message);return;}
@@ -575,4 +572,4 @@ function queueEmail(eventKey,userId,clId,date,vars){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._safeUp=_safeUp;window._isRlsErr=_isRlsErr;window._syncErr=_syncErr;window._opErr=_opErr;window._reportSyncResults=_reportSyncResults;window.SB_URL=SB_URL;window.SB_ANON=SB_ANON;window.sb=sb;window._unesc=_unesc;window._mU=_mU;window._mC=_mC;window._mS=_mS;window._mA=_mA;window._DAY_MS=_DAY_MS;window._cutoff30ISO=_cutoff30ISO;window._cutoff30Date=_cutoff30Date;window._mapTk=_mapTk;window._roleCtx=_roleCtx;window._applySubmissions=_applySubmissions;window._applyApprovals=_applyApprovals;window._applyNotifications=_applyNotifications;window._applyFeedback=_applyFeedback;window._applyTickets=_applyTickets;window._HRM_CFG_ID=_HRM_CFG_ID;window._applyHrmConfig=_applyHrmConfig;window._pushNotifKinds=_pushNotifKinds;window._hrmStrip=_hrmStrip;window._syncBar=_syncBar;window._anyLoading=_anyLoading;window._isLoading=_isLoading;window._tabLoading=_tabLoading;window._lazyLoad=_lazyLoad;window._lazyLoadDate=_lazyLoadDate;window._lazyForRoute=_lazyForRoute;window._lazyCold=_lazyCold;window._startRealtime=_startRealtime;window.loadFromSB=loadFromSB;window._sync=_sync;window._pushRow=_pushRow;window._pushRows=_pushRows;window._delRow=_delRow;window._mAnn=_mAnn;window._annRow=_annRow;window._mDraft=_mDraft;window._draftRow=_draftRow;window.queueEmail=queueEmail;
+window._safeUp=_safeUp;window._isRlsErr=_isRlsErr;window._syncErr=_syncErr;window._opErr=_opErr;window._reportSyncResults=_reportSyncResults;window.SB_URL=SB_URL;window.SB_ANON=SB_ANON;window.sb=sb;window._unesc=_unesc;window._mU=_mU;window._mC=_mC;window._mS=_mS;window._mA=_mA;window._DAY_MS=_DAY_MS;window._cutoff30ISO=_cutoff30ISO;window._cutoff30Date=_cutoff30Date;window._mapTk=_mapTk;window._roleCtx=_roleCtx;window._applySubmissions=_applySubmissions;window._applyApprovals=_applyApprovals;window._applyNotifications=_applyNotifications;window._applyFeedback=_applyFeedback;window._applyTickets=_applyTickets;window._HRM_CFG_ID=_HRM_CFG_ID;window._applyHrmConfig=_applyHrmConfig;window._pushNotifKinds=_pushNotifKinds;window._hrmStrip=_hrmStrip;window._syncBar=_syncBar;window._anyLoading=_anyLoading;window._isLoading=_isLoading;window._tabLoading=_tabLoading;window._lazyLoad=_lazyLoad;window._lazyLoadDate=_lazyLoadDate;window._lazyForRoute=_lazyForRoute;window._lazyCold=_lazyCold;window._startRealtime=_startRealtime;window.loadFromSB=loadFromSB;window._sync=_sync;window._pushRow=_pushRow;window._pushRows=_pushRows;window._delRow=_delRow;window._mDraft=_mDraft;window._draftRow=_draftRow;window.queueEmail=queueEmail;

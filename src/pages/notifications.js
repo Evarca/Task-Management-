@@ -188,7 +188,7 @@ function _navNotif(route,filters){
 const _NOTIF_ROUTE={
   checklist:'mychecklists', submission:'mychecklists', submission_late:'teamview',
   approval:'approvals', ticket:'tickets', question:'questions',
-  announcement:'announcements', feedback:'notifications', access:'profile',
+  feedback:'notifications', access:'profile',
   general:'notifications',
 };
 App._notifClick=(id)=>{

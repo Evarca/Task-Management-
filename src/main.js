@@ -13,7 +13,6 @@ import './pages/login.js';
 import './pages/dashboard.js';
 import './pages/users.js';
 import './pages/departments.js';
-import './pages/announcements.js';
 import './pages/locations.js';
 import './pages/documents.js';
 import './pages/checklists.js';
@@ -39,7 +38,7 @@ import './pages/accesscontrol.js';
   // verified server-side by the RPC, is the whole key. Nothing else of the app loads for it.
   if(_pubStatusBoot())return;
   const _hashRoute=(window.location.hash||'').replace('#','').trim();
-  const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','allcl','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile','accesscontrol','announcements','tickets'];
+  const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','allcl','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile','accesscontrol','tickets'];
   const _deepLink=VALID_ROUTES.includes(_hashRoute)?_hashRoute:null;
   try{const{data:{session}}=await sb.auth.getSession();if(session){
       // Load local cache first for instant UI

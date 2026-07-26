@@ -370,7 +370,6 @@ const HOW={
   dashboard:{t:'Your day at a glance: what needs you, what is still open, and quick actions. Most people never need another tab.',d:['Cards show today\'s checklists and the tickets on you — tap either to act.','“My record” is your own submission history over a date range you pick.','Managers and admins also see where the whole team stands today.'],l:[['mychecklists','My Checklists'],['approvals','Approvals']]},
   mychecklists:{t:'Everything assigned to YOU, day by day. Pick a date on the strip; submit each card.',d:['Miss the due time → the card turns LATE (red) and analytics record it.','Whether you may submit past/future dates or edit comes from your Personal settings.','A checklist set to “any one can complete” counts as done once a teammate submits it.'],l:[['tickets','Tickets'],['approvals','Approvals']]},
   tickets:{t:'Issues raised by people or auto-created when a checklist answer breaches a rule.',d:['Bad answers on escalation questions open tickets automatically and re-escalate while open.','Resolve with a note — the submitter is notified.'],l:[['mychecklists','My Checklists'],['questions','Questions']]},
-  announcements:{t:'Company-wide messages. Everyone sees them; admins create them.',d:['Target a department or a client to narrow who gets it.','Recipients get a bell alert, and an email too when announcement email is switched on in Settings.'],l:[['notifications','Notifications'],['settings','Settings']]},
   teamview:{t:'Live board of your team: today\'s checklist status, lates and open tickets per person. Click someone to drill into their calendar.',l:[['users','Users'],['approvals','Approvals']]},
   users:{t:'The people directory: identity, manager, workplace and status.',d:['“Reports to” decides who approves this person\'s submissions and who sees them in Team.','Access is NOT set here — one role per person in Access Control.','Deactivating someone unassigns their open tickets so nothing sits in an unwatched queue.'],l:[['accesscontrol','Access Control'],['hierarchy','Hierarchy']]},
   hierarchy:{t:'The reporting tree, drawn from each person\'s “Reports to”. Fix structure in Users.',l:[['users','Users']]},
@@ -423,12 +422,10 @@ function _refLinks(type,id){
     add('Sub-departments',subDepts(id).map(k=>k.name),'Delete or re-parent them first');
     add('People in this department',DB.users.filter(x=>x.department===nm).map(x=>fullName(x)),'Move them to another department');
     add('Checklists targeting it',DB.checklists.filter(c=>c.department===nm).map(c=>c.name),'Edit the checklist’s department');
-    add('Announcements targeting it',(DB.announcements||[]).filter(a=>a.deptTarget===nm).map(a=>a.title),'Delete or retarget the announcement');
   }else if(type==='location'){
     add('Checklists attached to it',(DB.checklists||[]).filter(c=>(c.locationIds||[]).includes(id)).map(c=>c.name),'Detach the client in the checklist editor');
     add('Folders held against it',(DB.tmFolders||[]).filter(f=>f.locationId===id).map(f=>f.name),'Delete the folders first — their files go with them');
     add('Files held against it',(DB.tmDocuments||[]).filter(d=>d.locationId===id).map(d=>d.name),'Delete the files first');
-    add('Announcements targeting it',(DB.announcements||[]).filter(a=>a.locTarget===id).map(a=>a.title),'Delete or retarget the announcement');
   }else if(type==='checklist'){
     const c=clById(id);
     add('Assigned to people',((c&&c.assignees)||[]).map(x=>{const au=uById(x);return au?fullName(au):null;}),'Unassign everyone in the checklist editor first');

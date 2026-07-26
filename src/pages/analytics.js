@@ -109,6 +109,61 @@ window._AData=null;window._AFiltered=null;window._aCharts=[];
 // Who the dashboard analytics can see — the SAME reports-permission scope HRM Analytics uses, so the
 // two pages always show the same set of people (instead of a hard-coded reporting subtree).
 function _reportScopeIds(){const s=new Set(scopedUsers('reports').map(u=>u.id));s.add(S.uid);return s;}
+/* ── THE CLIENT BOARD ──
+   For a business-setup company the question is never "how did employees do" but "where does
+   each client stand". One row per client with live case work: average progress, what's blocked,
+   what's overdue, the next deadline. Tap a row for the full client file. */
+function _clientCasesSection(){
+  const today=todayISO();
+  const rows=[];
+  let kOpen=0,kDue7=0,kOver=0,kBlocked=0;
+  (DB.locations||[]).filter(l=>l.status!=='Inactive').forEach(l=>{
+    const cases=(DB.checklists||[]).filter(c=>isCase(c)&&c.status!=='Draft'&&(c.locationIds||[]).includes(l.id));
+    const open=cases.filter(c=>!caseSub(c));
+    if(!open.length)return;
+    let pctSum=0,blocked=0,over=0,nextDl=null;
+    open.forEach(c=>{
+      const cd=caseDate(c);
+      const pr=_ansProgress(c,cd);pctSum+=pr.total?pr.done/pr.total:0;
+      if(_clOverdue(c,cd))over++;
+      const dl=_clDeadlineDate(c.id);
+      if(dl){if(!nextDl||dl<nextDl)nextDl=dl;
+        const in7=(new Date(dl+'T00:00:00')-new Date(today+'T00:00:00'))/86400000;
+        if(in7>=0&&in7<=7)kDue7++;}
+      _clQuestions(c).forEach(q=>{const a2=_ansFor(c.id,cd,q.id);if(a2&&a2.response!==null&&a2.response!=='')return;
+        const st=_qStatusOf(c.id,cd,q.id);if(st&&st.status!=='in_progress')blocked++;});
+    });
+    kOpen+=open.length;kOver+=over;kBlocked+=blocked;
+    rows.push({l,open:open.length,pct:Math.round(pctSum/open.length*100),blocked,over,nextDl});
+  });
+  if(!rows.length)return'';
+  rows.sort((a,b)=>(b.over-a.over)||(b.blocked-a.blocked)||(a.pct-b.pct));
+  const kpi=(n,label,tone)=>`<div style="flex:1;min-width:110px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 14px">
+    <div style="font-size:20px;font-weight:800;color:${tone||'var(--c-text)'}">${n}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--c-text-3)">${label}</div></div>`;
+  return `<div style="margin-bottom:14px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      ${kpi(kOpen,'Open cases')}${kpi(kDue7,'Due in 7 days',kDue7?'#B45309':null)}${kpi(kOver,'Overdue',kOver?'#B91C1C':null)}${kpi(kBlocked,'Blocked steps',kBlocked?'#92400E':null)}
+    </div>
+    <div class="ui-card" style="overflow:hidden">
+      <div style="padding:12px 16px 8px;font-size:12.5px;font-weight:800">${ic('pin','w-4 h-4 inline')} Where each client stands</div>
+      ${rows.map(r=>`<div onclick="App._openClientFile('${r.l.id}')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--c-border);cursor:pointer" onmouseover="this.style.background='var(--c-surface-2)'" onmouseout="this.style.background='transparent'">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.l.name)}</div>
+          <div style="font-size:11px;color:var(--c-text-3)">${r.open} open case${r.open===1?'':'s'}${r.nextDl?' · next deadline '+fmtS(r.nextDl):''}</div>
+        </div>
+        ${r.over?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#FEE2E2;color:#B91C1C">${r.over} OVERDUE</span>`:''}
+        ${r.blocked?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#FEF3C7;color:#92400E">${r.blocked} blocked</span>`:''}
+        <div style="flex:0 0 120px;display:flex;align-items:center;gap:8px">
+          <div style="flex:1;height:7px;border-radius:99px;background:var(--c-surface-2);overflow:hidden"><div style="height:100%;width:${r.pct}%;border-radius:99px;background:${r.over?'#EF4444':r.blocked?'#F59E0B':'#0EA5E9'}"></div></div>
+          <span style="font-size:12px;font-weight:800;color:var(--c-text-2)">${r.pct}%</span>
+        </div>
+        <span style="color:var(--c-text-3)">${ic('chevR','w-4 h-4')}</span>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
 function analyticsPage(){
   const today=todayISO();
   // Collect all relevant submissions
@@ -240,6 +295,7 @@ function analyticsPage(){
   return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
   ${hdr('Company',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${typeof _pulseStrip==='function'?_pulseStrip():''}
+  ${_clientCasesSection()}
   ${typeof _clOverviewWidget==='function'?_clOverviewWidget(today):''}
   <!-- Filter bar -->
   <div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:14px 16px;margin-bottom:14px;position:sticky;top:0;z-index:20">
@@ -293,7 +349,7 @@ function analyticsPage(){
     <div style="${_cc}"><div class="fd" style="${_ct}">Tickets</div><div style="position:relative;height:230px"><canvas id="aChartTickets" data-chart="tickets"></canvas></div></div>
   </div>
   <div class="achart-grid" style="margin-bottom:14px">
-    <div style="${_cc}"><div class="fd" style="${_ct}">Compliance</div><div style="position:relative;height:210px"><canvas id="aChartCompliance" data-chart="compliance"></canvas></div></div>
+    <div style="${_cc}"><div class="fd" style="${_ct}">Compliance</div>${(compliantN+nonCompliantN)?`<div style="position:relative;height:210px"><canvas id="aChartCompliance" data-chart="compliance"></canvas></div>`:`<div style="height:210px;display:grid;place-items:center;font-size:12.5px;color:var(--c-text-3);text-align:center;padding:0 20px">No submitted checklists in this range yet.<br/>Compliance appears once work is submitted.</div>`}</div>
     <div style="${_cc}"><div class="fd" style="${_ct}">Submissions by weekday</div><div style="position:relative;height:210px"><canvas id="aChartWeekday" data-chart="weekday"></canvas></div></div>
   </div>
   ${typeof _clOverviewTable==='function'?_clOverviewTable(today,{title:"Today's checklists"}):''}
@@ -384,4 +440,4 @@ function _csvDownload(rows,filenamePrefix){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._reportScopeIds=_reportScopeIds;window.analyticsPage=analyticsPage;window._csvDownload=_csvDownload;
+window._reportScopeIds=_reportScopeIds;window.analyticsPage=analyticsPage;window._clientCasesSection=_clientCasesSection;window._csvDownload=_csvDownload;

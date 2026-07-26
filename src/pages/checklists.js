@@ -132,7 +132,7 @@ function _renderClModal(editing){
           <div class="grid grid-cols-2 gap-3">
             <div><label for="cn-ddate" class="block text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-1">Date</label>
               <div style="display:flex;gap:6px;align-items:center">
-                <input id="cn-ddate" type="date" value="${esc(_clDeadlineDate(c.id)||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
+                <input id="cn-ddate" type="date" value="${esc((c._deadlineDate!==undefined?c._deadlineDate:_clDeadlineDate(c.id))||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
                 <button type="button" onclick="App._clearDeadline('date')" title="Remove the deadline date" aria-label="Remove the deadline date" style="flex-shrink:0;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;border:1.5px solid #ECEDF0;background:#fff;color:#9CA3AF;cursor:pointer">${ic('x','w-4 h-4')}</button>
               </div></div>
             <div><label for="cn-time" class="block text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-1">Time</label>

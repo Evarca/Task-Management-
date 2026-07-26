@@ -18,7 +18,7 @@ window.DB={
   leaveBalances:[], // per-user/type/leaveYear ledgers
   holidays:[],      // public holiday calendar
   hrmAudit:[],      // HRM audit log (local-only — NOT audit_logs)
-  announcements:[], // §10 — company announcements (FRONTEND-ONLY, never synced). {id,title,body,deptTarget|null,locTarget|null,createdBy,createdAt}
+  announcements:[], // retired in this build — kept as an empty array so nothing trips on it
   roleProfiles:{},  // PERMISSIONS — named permission bundles (frontend-only, seeded by _seedRoleProfiles)
   // ── SOPs — Standard Operating Procedures: a browsable library you can also assign (sync to sop_templates/sop_instances).
   //    A SOP = {category, description, content body, ordered steps}. Onboarding is just the 'Onboarding'-category SOP assigned to a new hire.

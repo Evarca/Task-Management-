@@ -48,6 +48,9 @@ const as = (id) => { W.S.uid = id; };
 async function answer(clId, qId, value, comment) {
   W.RUN[clId] = W.RUN[clId] || { checklistId: clId, userId: W.S.uid, date: TODAY, tasks: [], questionResponses: [] };
   W.RUN[clId].date = TODAY;
+  // RUN persists across tests; drop any stale draft for this question so setting the same
+  // value again is a SET, not the tap-again-to-clear toggle the UI now offers.
+  W.RUN[clId].questionResponses = (W.RUN[clId].questionResponses || []).filter(r => r.questionId !== qId);
   W.App._setQR(clId, qId, value, true);
   if (comment !== undefined) W.App._setQRComment(clId, qId, comment);
   await W.App._ansSubmit(clId, TODAY, qId);

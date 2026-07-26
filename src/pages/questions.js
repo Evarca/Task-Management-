@@ -300,7 +300,7 @@ App._delQuestion=(id)=>{
 App._editQuestion=(id)=>{
   const existing=id?(DB.questions||[]).find(x=>x.id===id):null;
   _QED=existing?JSON.parse(JSON.stringify(existing)):{
-    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false,isPublic:false,department:'',subDepartment:''
+    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false,isPublic:true,department:'',subDepartment:''
   };
   if(_QED.department===undefined)_QED.department='';
   if(_QED.subDepartment===undefined)_QED.subDepartment='';
@@ -430,7 +430,12 @@ App._saveQuestion=()=>{
   const text=(_QED.text||'').trim();
   if(!text){toast('Question text is required','err');const qb=document.getElementById('q-save-btn');if(qb){qb.disabled=false;qb.textContent=_QED?.createdAt?'Save changes':'Create question';}return;}
   if(!(_QED.department||'').trim()){toast('Select a department','err');return;}
-  if(!(_QED.subDepartment||'').trim()){toast('Select a sub-department','err');return;}
+  // Only demand a sub-department when the chosen department actually has any —
+  // otherwise a department without sub-departments could never hold a question.
+  {const _dep=(DB.departments||[]).find(d=>d.name===_QED.department);
+   const _hasSubs=!!_dep&&(DB.departments||[]).some(d=>d.parentId===_dep.id);
+   if(_hasSubs&&!(_QED.subDepartment||'').trim()){toast('Select a sub-department','err');return;}
+   if(!_hasSubs)_QED.subDepartment='';}
   if(_QED.type==='answer'){
     _QED.options=(_QED.options||[]).filter(o=>(o.text||'').trim());
     if(!_QED.options.length){toast('Add at least one answer option','err');const qb=document.getElementById('q-save-btn');if(qb){qb.disabled=false;qb.textContent=_QED?.createdAt?'Save changes':'Create question';}return;}
@@ -603,6 +608,7 @@ function _snapshotCLD(){
   if(el('cn-sd'))CLD.startDate=el('cn-sd').value||null;
   if(el('cn-ed'))CLD.endDate=el('cn-ed').value||null;
   if(el('cn-time'))CLD.scheduleTime=el('cn-time').value||null;
+  if(el('cn-ddate'))CLD._deadlineDate=el('cn-ddate').value||null; // pending deadline date survives re-renders
   if(el('cn-anyone'))CLD.anyOne=el('cn-anyone').classList.contains('on');
 }
 

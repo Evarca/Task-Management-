@@ -2,7 +2,25 @@
 /* ===== ALL CHECKLISTS (Super Admin + Admin role) ===== */
 // Read-only question responses block (adapted from team view)
 function _roResponses(c,sub,date){
-  if(!sub)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No submission for ${fmtD(date)}</div>`;
+  if(!sub){
+    // A case / shared run in progress has no submission yet, but it HAS answers — show them.
+    const partial=_ansAll(c.id,date);
+    if(partial.length){
+      const qs2=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
+      const done2=qs2.filter(q=>{const a=_ansFor(c.id,date,q.id);return a&&a.response!==null&&a.response!=='';}).length;
+      return `<div style="padding:12px 16px">
+        <div style="font-size:11px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">In progress — ${done2}/${qs2.length} answered${isCase(c)?' (case, open since '+fmtS(caseDate(c))+')':''}</div>
+        ${qs2.map(q=>{const a=_ansFor(c.id,date,q.id);const done=!!(a&&a.response!==null&&a.response!=='');const by=done&&a.submittedBy?uById(a.submittedBy):null;
+          return `<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0">
+            <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;${done?'background:#DCFCE7;color:#0B7A55':'background:#F3F4F6;color:#C8C5BD'}">${done?ic('check','w-3 h-3'):''}</span>
+            <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:${done?'#9CA3AF':'#15171C'}">${esc(q.text)}</span>
+            ${done?`<span style="font-size:11px;font-weight:700;color:#0B7A55">${esc(String(a.response))}</span><span style="font-size:11px;color:#B8B5AC">${by?esc(fullName(by))+' · ':''}${a.submittedAt?new Date(a.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>`
+              :_qsBadge(c.id,date,q.id)}
+          </div>`;}).join('')}
+      </div>`;
+    }
+    return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No submission for ${fmtD(date)}</div>`;
+  }
   const qResps=sub.questionResponses||[];
   const qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
   if(!qs.length)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No questions in this checklist</div>`;
@@ -70,7 +88,8 @@ function allClsPage(){
 
   // One read-only expandable card
   const roCard=(c,sub,key,metaExtra)=>{
-    const st=sub?sub.status:(d<today?'Late':'Pending');
+    const prog=_ansProgress(c,d);  // live shared-run answers (case-aware) — visible before submission
+    const st=sub?sub.status:prog.done?'In progress':(d<today&&!isCase(c)?'Late':_clOverdue(c,d)?'Late':'Pending');
     const exp=S.filters.aclExp===key;
     const ansN=sub?(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length:0;
     return`<div style="background:var(--c-surface);border-radius:var(--r-md);border:1px solid var(--c-border);box-shadow:var(--sh-sm);border-left:4px solid ${BC[st]||'#D1D5DB'};overflow:hidden">
@@ -81,6 +100,7 @@ function allClsPage(){
         </div>
         <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
           ${sub&&(c.questionIds||[]).length?_subBadges(c,sub,{small:true}):''}
+          ${!sub&&prog.done?`<span style="font-size:11px;font-weight:700;color:#0E9F6E;flex-shrink:0">${prog.done}/${prog.total} answered</span>`:''}
           ${chip(st)}
           <span style="color:var(--c-text-3);transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
         </div>

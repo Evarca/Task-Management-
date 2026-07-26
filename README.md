@@ -13,7 +13,6 @@ login accounts** as the full Evarca deployment.
 | **Checklists** | Builder (`checklists`) · All results (`allcl`) · Team (`teamview`) |
 | **Questions** | `questions` — the reusable question bank + escalation rules |
 | **Tickets** | `tickets` — raised by people or auto-created from a failing answer |
-| **Announcements** | `announcements` |
 | **Inbox** | Alerts (`notifications`) · Approvals (`approvals`) |
 | **People** | Directory + user creation (`users`) · Hierarchy (`hierarchy`) |
 | **Administration** | Settings (`settings`) · Access Control (`accesscontrol`) · Departments · **Clients** (`locations` — table, filters, folders + documents) · Audit |
@@ -171,6 +170,11 @@ them re-declares the row or the control size locally, so they can't drift apart 
 
 ## What's not in it
 
+**Announcements were removed in round 6** on request — the nav entry, the page, the notification
+event, the templates and every guard that referenced them. The `announcements` table itself is
+untouched (the full platform still owns it), and `#announcements` deep links land on the dashboard.
+
+
 Attendance, Leave, Payroll, Shifts, Overtime, Discipline, Lifecycle flows, Letters, Surveys,
 Performance reviews, OKRs and HR Config. Their page modules and engines are not in `src/` at all —
 this is a smaller app, not the full one with tabs hidden.
@@ -188,7 +192,7 @@ instead of a blank page (`_RETIRED_ROUTES` in `src/ui/nav.js`).
 npm install       # install dependencies
 npm run dev       # local dev server
 npm run build     # production build into dist/
-npm test          # route sweep + reference audit + behaviour tests (215 assertions)
+npm test          # route sweep + reference audit + behaviour tests (226 assertions)
 ```
 
 ## Deploying
@@ -312,7 +316,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 215 assertions in six files:
+`npm test` runs 226 assertions in seven files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every

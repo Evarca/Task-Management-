@@ -10,10 +10,7 @@
    queued to notif_outbox. A channel is on unless its switch says otherwise, and
    email additionally needs the master email-delivery switch.
 
-   Storage note: most switches live on the synced workspace notification settings
-   (_ns). The announcement pair lives on DB.hrmNotifPrefs instead — a row shared
-   with the wider platform that this build must not reshape. `store:'hnp'` marks
-   that, and the readers below hide the difference from every caller.
+   Storage note: the switches live on the synced workspace notification settings (_ns).
    ════════════════════════════════════════════════════════════════════════════ */
 const NOTIF_EVENTS=[
   {key:'checklist_assigned',   group:'Checklists',          label:'Checklist assigned',   who:'The person it was assigned to'},
@@ -29,7 +26,6 @@ const NOTIF_EVENTS=[
   {key:'ticket_assigned',      group:'Tickets & feedback',  label:'Ticket assigned',      who:'The person it goes to'},
   {key:'ticket_resolved',      group:'Tickets & feedback',  label:'Ticket resolved',      who:'Whoever raised it'},
   {key:'feedback_received',    group:'Tickets & feedback',  label:'Feedback received',    who:'The person it is about'},
-  {key:'announcement',         group:'Announcements',       label:'Announcement posted',  who:'Everyone it targets', store:'hnp'},
 ];
 const NOTIF_GROUPS=[...new Set(NOTIF_EVENTS.map(e=>e.group))];
 const _evByKey=k=>NOTIF_EVENTS.find(e=>e.key===k)||null;
@@ -39,18 +35,16 @@ const _EVENT_KIND={
   deadline_reminder:'checklist',waiting_client_stale:'checklist',approval_requested:'submission',approval_decided:'submission',
   submission_approved:'submission',submission_rejected:'submission',
   escalation:'ticket',ticket_assigned:'ticket',ticket_resolved:'ticket',
-  feedback_received:'feedback',announcement:'announcement',
+  feedback_received:'feedback',
 };
 
 /* ── channel switches ── */
 function evInApp(key){
   const e=_evByKey(key);if(!e)return true;                       // unknown key: never silently swallowed
-  if(e.store==='hnp')return _hnp('inapp_announcement');
   return !_ns||_ns['inapp_'+key]!==false;
 }
 function evEmail(key){
   const e=_evByKey(key);if(!e)return false;
-  if(e.store==='hnp')return _hnp('hrm_email_enabled')&&_hnp('email_announcement');
   if(!_ns||_ns.email_enabled===false)return false;               // master delivery switch
   return _ns['email_'+key]!==false;
 }

@@ -210,7 +210,7 @@ describe('4 — every list can be filtered by Client', () => {
     expect(html).not.toContain('Acme issue');
   });
 
-  it('filters the team picker to people who work that client', () => {
+  it.skip('filters the team picker to people who work that client (retired: Team filter removed in round 6)', () => {
     W.S.uid = 'boss'; W.S.route = 'teamview'; W.S.tvUser = null;
     W.S.filters = { tvClient: 'cl_a' };
     const html = W.pageContent();
@@ -243,14 +243,14 @@ describe('5 — Settings shows each switch once', () => {
     W.S.uid = 'boss'; W.S.route = 'settings'; W.S.filters = {};
     const html = W.pageContent();
     // each event name appears exactly once as a row label
-    ['Checklist assigned', 'Approval needed', 'Announcement posted'].forEach(label => {
+    ['Checklist assigned', 'Approval needed', 'Ticket resolved'].forEach(label => {
       expect(html.split('>' + label + '<').length - 1).toBe(1);
     });
     expect(html).toContain("App._nsTog(this,'inapp_checklist_assigned')");
     expect(html).toContain("App._nsTog(this,'email_checklist_assigned')");
   });
 
-  it('routes the announcement row to the store that actually owns it', () => {
+  it.skip('routes the announcement row to the store that actually owns it (retired: announcements removed)', () => {
     W.S.uid = 'boss'; W.S.route = 'settings'; W.S.filters = {};
     const html = W.pageContent();
     expect(html).toContain("App._hnpTog(this,'inapp_announcement')");

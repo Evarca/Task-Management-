@@ -40,7 +40,7 @@ const order = [
   '../src/engine/notifications.js', '../src/engine/core.js', '../src/engine/answers.js',
   '../src/ui/nav.js', '../src/ui/charts.js',
   '../src/pages/login.js', '../src/pages/dashboard.js', '../src/pages/users.js',
-  '../src/pages/departments.js', '../src/pages/announcements.js',
+  '../src/pages/departments.js',
   '../src/pages/locations.js', '../src/pages/documents.js', '../src/pages/checklists.js', '../src/pages/mychecklists.js',
   '../src/pages/teamview.js', '../src/pages/allchecklists.js', '../src/pages/approvals.js',
   '../src/pages/questions.js', '../src/pages/notifications.js', '../src/pages/hierarchy.js',

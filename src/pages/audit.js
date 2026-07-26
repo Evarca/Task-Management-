@@ -14,7 +14,6 @@ function auditPage(){
     if(s2.includes('question'))return 'Questions';
     if(s2.includes('department'))return 'Departments';
     if(s2.includes('location')||s2.includes('client'))return 'Clients';
-    if(s2.includes('announcement'))return 'Announcements';
     if(s2.includes('setting'))return 'Settings';
     return 'Other';};
   // Audit surface: the synced audit log plus this device's local activity log. Rows written by

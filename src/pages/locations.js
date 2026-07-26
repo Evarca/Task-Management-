@@ -122,7 +122,7 @@ async function _pubStatusRender(token){
   const wrap=inner=>`<div style="min-height:100vh;background:#F7F6F2;padding:28px 16px;font-family:inherit">
     <div style="max-width:640px;margin:0 auto">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-        <div style="width:38px;height:38px;border-radius:11px;background:#15171C;color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px">E</div>
+        <img src="/icon-192.png" alt="Evarca" width="38" height="38" style="width:38px;height:38px;border-radius:11px;object-fit:cover" onerror="this.outerHTML='<div style=&quot;width:38px;height:38px;border-radius:11px;background:#15171C;color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px&quot;>E</div>'"/>
         <div><div style="font-size:15px;font-weight:800;color:#15171C">Evarca</div><div style="font-size:11px;color:#9CA3AF">Live status</div></div>
       </div>
       ${inner}
@@ -286,7 +286,24 @@ function _locProgTab(l){
       </div>`;}).join('')}
   </div>`:'';
 
-  return contact+share+blockedCard
+  // ── open tickets touching this client (through its checklists) ──
+  const cliTickets=(DB.tickets||[]).filter(t=>clientIdsOfTicket(t).includes(l.id)&&t.status!=='Resolved'&&t.status!=='Closed');
+  const ticketsCard=`<div class="ui-card" style="padding:12px 16px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:${cliTickets.length?'6px':'0'}">
+      <div style="font-size:12.5px;font-weight:800">${ic('flag','w-4 h-4 inline')} Open tickets — ${cliTickets.length}</div>
+      ${can('tickets','create')?`<button onclick="App._newTicketFor('${l.id}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="margin-left:auto">${ic('plus','w-3 h-3')} Raise ticket</button>`:''}
+    </div>
+    ${cliTickets.slice(0,5).map(t=>{const a2=uById(t.assignedTo);
+      return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 0;cursor:pointer" onclick="S.route='tickets';S.filters.tkClient='${l.id}';render()">
+        <span style="width:7px;height:7px;border-radius:99px;background:${t.priority==='High'||t.priority==='Critical'?'#EF4444':t.priority==='Medium'?'#F59E0B':'#9CA3AF'};flex-shrink:0"></span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${esc(t.title)}</span>
+        ${chip(t.status)}
+        ${a2?`<span style="font-size:11px;color:var(--c-text-3)">${esc(fullName(a2))}</span>`:''}
+      </div>`;}).join('')}
+    ${cliTickets.length>5?`<div style="font-size:11px;color:var(--c-text-3);margin-top:3px">+${cliTickets.length-5} more — tap any row to open Tickets filtered to this client.</div>`:''}
+  </div>`;
+
+  return contact+share+blockedCard+ticketsCard
     +(openCases.length?`<div style="${lab};margin:2px 0 8px">Open cases — ${openCases.length}</div>`+openCases.map(caseBlock).join(''):'')
     +((openCases.length===0&&doneCases.length===0)?empty('doc','No cases yet','Create a One-time checklist and attach this client — it becomes their case and shows here.'):'')
     +recurringCard
@@ -311,7 +328,11 @@ App._shareCopy=(tok)=>{
 };
 App._shareRevoke=(tok)=>{
   if(!can('locations','edit'))return toast('You need Clients → Edit','err');
-  if(!confirm('Revoke this link? The client\'s page stops working immediately.'))return;
+  confirmModal({title:'Revoke this link?',body:'The client\'s status page stops working immediately. You can always create a fresh link later.',
+    confirmLabel:'Revoke link',danger:true,onConfirm:`App._shareRevokeGo('${esc(tok)}')`});
+};
+App._shareRevokeGo=(tok)=>{
+  if(!can('locations','edit'))return;
   const row=(DB.tmShareLinks||[]).find(x=>x.token===tok);if(row){row.enabled=false;row.revokedAt=new Date().toISOString();}
   sb.from('tm_share_links').update({enabled:false,revoked_at:new Date().toISOString()}).eq('token',tok)
     .then(({error})=>{if(error)_syncErr('share link')(error);}).catch(_syncErr('share link'));
@@ -336,13 +357,24 @@ async function _nudgeLoad(){
 /* ── nudge: email the client about the thing we're waiting on, and keep the record ── */
 App._nudgeClient=(locId,clId,qId)=>{
   if(!can('locations','edit'))return toast('You need Clients → Edit','err');
+  const m=(DB.tmClientMeta||{})[locId]||{};
+  const q=(DB.questions||[]).find(x=>x.id===qId);
+  if(!m.contactEmail)return toast('Add a contact email on the client first','err');
+  confirmModal({title:'Nudge the client?',body:'Emails <b>'+esc(m.contactEmail)+'</b> a polite reminder about "'+esc(q?q.text:'')+'" and records that you chased it.',
+    confirmLabel:'Send reminder',onConfirm:`App._nudgeClientGo('${esc(locId)}','${esc(clId)}','${esc(qId)}')`});
+};
+App._nudgeClientGo=(locId,clId,qId)=>{
+  if(!can('locations','edit'))return;
   const l=locById(locId);const m=(DB.tmClientMeta||{})[locId]||{};const c=clById(clId);
   const q=(DB.questions||[]).find(x=>x.id===qId);
-  if(!l||!c||!q)return;
-  if(!m.contactEmail)return toast('Add a contact email on the client first','err');
-  if(!confirm('Email '+m.contactEmail+' a reminder about "'+q.text+'"?'))return;
-  const subj='A quick reminder from '+((_ns&&_ns.email_from_name)||'Evarca')+' — '+c.name;
-  const body='Hello'+(m.contactName?' '+m.contactName:'')+',\n\nWe are still waiting on you for the following item on "'+c.name+'":\n\n  • '+q.text+'\n\nSending it over as soon as convenient keeps your setup on schedule. Thank you!\n\n'+(((_ns&&_ns.email_from_name)||'Evarca'));
+  if(!l||!c||!q||!m.contactEmail)return;
+  // Compose from the editable template (Settings → Templates → "Client reminder").
+  const vars={contact_name:m.contactName||'there',client_name:l.name,checklist_name:c.name,
+    question:q.text,from_name:(_ns&&_ns.email_from_name)||'Evarca'};
+  const defs=_defaultTemplates().client_nudge;
+  const saved=(_ns&&_ns.templates&&_ns.templates.client_nudge)||{};
+  const subj=_fillTemplate(saved.subject||defs.subject,vars);
+  const body=_fillTemplate(saved.body||defs.body,vars);
   const ob={id:uid('ob'),to_user:null,to_email:m.contactEmail,subject:subj,body,kind:'client_nudge',status:'queued',created_at:new Date().toISOString(),created_by_uid:S.uid};
   sb.from('notif_outbox').insert(ob).then(({error})=>{if(error)_syncErr('nudge email')(error);}).catch(_syncErr('nudge email'));
   const ng={id:uid('ng'),clientId:locId,checklistId:clId,questionId:qId,toEmail:m.contactEmail,note:q.text,sentBy:S.uid,sentAt:new Date().toISOString()};
@@ -352,6 +384,9 @@ App._nudgeClient=(locId,clId,qId)=>{
   log(fullName(me()),'Nudged client',l.name+' — '+q.text);
   saveDB();rr();toast('Reminder queued to '+m.contactEmail);
 };
+
+/* Jump straight to a client's file from anywhere (dashboard, tickets…). */
+App._openClientFile=(id)=>{S.route='locations';S.filters.locSel=id;S.filters.locTab='prog';S.filters.docFolder=null;render();window.scrollTo(0,0);};
 
 App.editLoc=(id=null)=>{
   const l=id?locById(id):null;
@@ -418,7 +453,7 @@ async function _clientMetaLoad(){
 
 App.delLoc=(id)=>{if(!can('locations','delete'))return toast('You need Clients → Delete','err');const l=locById(id);if(!l)return;
 // Referential-integrity guard: blocked while people are assigned to it, checklists use it,
-// or announcements target it.
+// (checklists attached, folders, files).
 if(!guardDelete('location',id,'"'+l.name+'"'))return;
 if(!confirm('Delete "'+l.name+'"?'))return;if(!DB.locations_deleted)DB.locations_deleted=[];if(!DB.locations_deleted.includes(id))DB.locations_deleted.push(id);DB.locations=DB.locations.filter(x=>x.id!==id);
 // DATA-4: clear the dangling locationId from every user pointing at the deleted location

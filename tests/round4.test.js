@@ -308,7 +308,8 @@ describe('6 — questions no longer ask for approval', () => {
 
 /* ═══ 7 — one filter bar everywhere ═══ */
 describe('7 — every list page renders the same filter row', () => {
-  const PAGES = ['pages/checklists.js', 'pages/allchecklists.js', 'pages/teamview.js',
+  // teamview dropped its filter bar on request (round 6): the page is just the people grid now.
+  const PAGES = ['pages/checklists.js', 'pages/allchecklists.js',
                  'pages/tickets.js', 'pages/locations.js', 'pages/users.js',
                  'pages/questions.js', 'pages/audit.js'];
 

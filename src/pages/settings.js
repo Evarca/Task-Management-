@@ -93,8 +93,8 @@ const EMAIL_EVENTS=[
   {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'waiting_client_stale',label:'Blocked on a client 3+ days', vars:'{{user_name}}, {{checklist_name}}, {{question}}, {{client_name}}, {{days}}, {{action_url}}'},
+  {key:'client_nudge',     label:'Client reminder (sent to the CLIENT)', vars:'{{contact_name}}, {{client_name}}, {{checklist_name}}, {{question}}, {{from_name}}'},
   {key:'escalation',       label:'Escalation raised',    vars:'{{submitter}}, {{checklist_name}}, {{question}}, {{answer}}, {{action_url}}'},
-  {key:'announcement',     label:'Announcement',         vars:'{{title}}, {{body}}, {{action_url}}'},
   {key:'ticket_assigned',  label:'Ticket assigned',      vars:'{{user_name}}, {{ticket_title}}, {{action_url}}'},
   {key:'ticket_resolved',  label:'Ticket resolved',      vars:'{{user_name}}, {{ticket_title}}, {{action_url}}'},
 ];
@@ -110,8 +110,9 @@ function _defaultTemplates(){
     feedback_received:{subject:'💬 New feedback received',                      body:'Hi {{user_name}},\n\nYou have received new feedback on {{checklist_name}}.\n\n{{action_url}}'},
     deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon. Please complete it before the cutoff.\n\n{{action_url}}'},
     waiting_client_stale:{subject:'⏳ Still waiting on {{client_name}} — {{days}} days', body:'Hi {{user_name}},\n\n"{{question}}" on {{checklist_name}} has been waiting on the client for {{days}} days. Consider nudging them from the client page.\n\n{{action_url}}'},
+    client_nudge:{subject:'A quick reminder about your {{checklist_name}}',
+      body:'Dear {{contact_name}},\n\nWe hope you are well. We are making good progress on your {{checklist_name}}, and there is one item we are currently waiting on from your side:\n\n    •  {{question}}\n\nSending it over at your earliest convenience keeps everything on schedule. If you have any questions, simply reply to this email.\n\nWarm regards,\n{{from_name}}'},
     escalation:{subject:'⚠️ Escalation: {{checklist_name}}',                    body:'An escalation was raised on {{checklist_name}}.\n\nQuestion: {{question}}\nAnswer: {{answer}}\nRaised by: {{submitter}}\n\nOpen Evarca to follow up.\n\n{{action_url}}'},
-    announcement:{subject:'📣 {{title}}',                                       body:'{{body}}\n\n{{action_url}}'},
     ticket_assigned:{subject:'🎫 Ticket assigned to you: {{ticket_title}}',    body:'Hi {{user_name}},\n\nA ticket has been assigned to you: {{ticket_title}}\n\n{{action_url}}'},
     ticket_resolved:{subject:'✅ Ticket resolved: {{ticket_title}}',           body:'Hi {{user_name}},\n\nThe ticket you raised has been resolved: {{ticket_title}}\n\n{{action_url}}'},
   };
@@ -213,7 +214,7 @@ async function sendEmail(eventType, userId, vars){
     submission_late:'teamview', submission_approved:'mychecklists',
     submission_rejected:'mychecklists', approval_requested:'approvals',
     approval_decided:'mychecklists', /* employee-facing: their submission result lives in My Checklists */ feedback_received:'notifications',
-    deadline_reminder:'mychecklists', waiting_client_stale:'locations', escalation:'tickets', announcement:'announcements',
+    deadline_reminder:'mychecklists', waiting_client_stale:'locations', escalation:'tickets',
     ticket_assigned:'tickets', ticket_resolved:'tickets',
   };
   const actionUrl = appUrl + '/#' + (routeMap[eventType]||'');
@@ -304,10 +305,8 @@ function settingsPage(){
   const emailOn=ns.email_enabled!==false;
   const _evCell=(key,ch)=>{
     const e=_evByKey(key)||{};
-    const on=ch==='inapp'?evInApp(key):(e.store==='hnp'?_hnp('email_announcement'):ns['email_'+key]!==false);
-    const call=e.store==='hnp'
-      ? `App._hnpTog(this,'${ch==='inapp'?'inapp_announcement':'email_announcement'}')`
-      : `App._nsTog(this,'${ch}_${key}')`;
+    const on=ch==='inapp'?evInApp(key):ns['email_'+key]!==false;
+    const call=`App._nsTog(this,'${ch}_${key}')`;
     return `<button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(e.label||key)} ${ch}" class="tog ${on?'on':'off'}" onclick="${call}"><span></span></button>`;
   };
   const notifTab=`<div class="space-y-4">

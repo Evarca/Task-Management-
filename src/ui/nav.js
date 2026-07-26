@@ -1,7 +1,7 @@
 
 /* ===== NAVIGATION ===== */
 // Flat lookup used by the mobile bottom bar (route → icon + label).
-const NAV_ITEMS=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['announcements','msg','Announcements'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Create Checklist'],['allcl','list','All Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['teamview','users','Team'],['analytics','chart','Dashboard'],['locations','pin','Clients'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit'],['accesscontrol','shield','Access Control']];
+const NAV_ITEMS=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Create Checklist'],['allcl','list','All Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['teamview','users','Team'],['analytics','chart','Dashboard'],['locations','pin','Clients'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit'],['accesscontrol','shield','Access Control']];
 // Bottom bar: My Day, the day's checklists and tickets are the three things an employee
 // opens all day; everything else lives behind More.
 const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
@@ -17,7 +17,6 @@ const NAV_ALL=[
   ['hub:cl','list','Checklists',()=>!!_hubHome('cl')],
   ['questions','help','Questions',()=>can('questions','view')],
   ['tickets','ticket','Tickets',()=>can('tickets','view')],
-  ['announcements','msg','Announcements',()=>can('announcements','view')],
 
   ['hub:people','users','People',()=>!!_hubHome('people')],
 
@@ -65,7 +64,7 @@ const navFor=()=>NAV_ALL.filter(n=>{try{return !!n[3]();}catch(e){return false;}
    (unknown keys fall through to a "More" section so nothing is ever dropped). */
 const NAV_DAILY=['dashboard','mychecklists','hub:inbox']; // keep the daily strip tiny — everything else lives in named sections
 const NAV_SECTION_OF={
-  'hub:cl':'Work',questions:'Work',tickets:'Work',announcements:'Work',
+  'hub:cl':'Work',questions:'Work',tickets:'Work',
   'hub:people':'People',
   'hub:admin':'Manage',
 };
@@ -216,7 +215,6 @@ function shell(content){
         <button onclick="App.go('profile')" class="md:hidden" aria-label="Profile">${avatar(u,'w-8 h-8','text-[11px]')}</button>
       </div>
     </header>
-    <div style="max-width:1152px;width:100%;margin:0 auto;padding:0 20px">${_annBanner()}</div>
     <main id="content" style="flex:1;padding:22px 20px;padding-bottom:96px;max-width:1152px;width:100%;margin:0 auto" class="md:pb-10">${content}</main>
   </div>
   <nav id="bottom-nav" class="mob-nav md:hidden fixed bottom-0 inset-x-0 z-30" style="background:var(--c-surface);border-top:1px solid var(--c-border);padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 16px rgba(16,24,40,.06)">
@@ -288,7 +286,7 @@ App.logout=()=>{
 /* ===== ROUTER ===== */
 // Routes retired with the HR modules. A saved bookmark, an old email deep-link or a
 // notification row pointing at one of these lands on the dashboard instead of a blank page.
-const _RETIRED_ROUTES=['attendance','leave','hrmconfig','hrmanalytics','reports','okr','overtime','shifts','lifecycle','letters','discipline','payroll','surveys','reviews','documents','sops','schedule','myschedule','expenses'];
+const _RETIRED_ROUTES=['attendance','leave','hrmconfig','hrmanalytics','reports','okr','overtime','shifts','lifecycle','letters','discipline','payroll','surveys','reviews','documents','sops','schedule','myschedule','expenses','announcements'];
 function _pageInner(){
   const r=S.route;
   if(_RETIRED_ROUTES.includes(r)){S.route='dashboard';return homeDash();}
@@ -301,7 +299,6 @@ function _pageInner(){
   if(r==='notifications')return notificationsPage();
   if(r==='tickets'){if(can('tickets','view'))return ticketsPage();S.route='mychecklists';return myClsPage();}
   if(r==='hierarchy'){if(can('hierarchy','view'))return hierarchyPage();S.route='dashboard';return homeDash();} // was ungated — nav hid it but a typed #hierarchy deep-link opened for anyone
-  if(r==='announcements'){if(can('announcements','view'))return announcementsPage();S.route='dashboard';return homeDash();}
   if(r==='analytics'){if(can('analytics','view'))return analyticsPage();S.route='dashboard';return homeDash();}
   if(r==='audit'){if(can('audit','view'))return auditPage();S.route='dashboard';return homeDash();}
   if(r==='settings'){if(can('settings','view'))return settingsPage();S.route='dashboard';return homeDash();}

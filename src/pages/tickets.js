@@ -74,6 +74,9 @@ function ticketsPage(){
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">'+
             '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:'+(priBg[t.priority]||'#F9FAFB')+';color:'+(priClr[t.priority]||'#6B7280')+'">'+esc(t.priority)+'</span>'+
             chip(t.status)+
+            (()=>{const _cli=clientIdsOfTicket(t).map(i=>locById(i)?.name).filter(Boolean);
+              return _cli.length?'<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#1D4ED8;background:#EFF6FF;padding:2px 9px;border-radius:20px">'+ic('pin','w-3 h-3')+esc(_cli.join(', '))+'</span>':'';})()+
+            (cl?'<span style="font-size:11px;color:var(--c-text-3)">'+esc(cl.name)+'</span>':'')+
             '<span style="font-size:11px;color:var(--c-text-3)">'+fmtS(t.date||t.createdAt?.slice(0,10)||'')+'</span>'+
           '</div>'+
           '<div style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:4px">'+esc(t.title)+'</div>'+
@@ -188,13 +191,28 @@ App.newTicket=()=>{
   if(hasHR)routeOpts.push(['hr','HR']);
   subTree(S.uid).filter(x=>x.status==='Active').forEach(x=>routeOpts.push(['user:'+x.id,'Team: '+fullName(x)]));
   if(!routeOpts.length){toast('No manager or HR is available to receive tickets','err');return;}
+  // Optional: tie the ticket to a client's checklist/case, so it shows on the client file
+  // and every client filter picks it up.
+  const _caseOpts=[['','— Not about a client —']].concat(
+    (DB.checklists||[]).filter(c=>c.status!=='Draft'&&(c.locationIds||[]).length)
+      .map(c=>{const cli=(c.locationIds||[]).map(i=>locById(i)?.name).filter(Boolean).join(', ');
+        return [c.id,(cli?cli+' — ':'')+c.name];}));
+  const _pre=window._tkPreCl||'';window._tkPreCl=null;
   modalShell({title:'New ticket',size:'max-w-md',
     body:'<div style="display:flex;flex-direction:column;gap:14px">'
       +fld('Subject','tk-title','','text','What is this about?')
       +'<div><label for="tk-desc" class="ui-label">Description</label><textarea id="tk-desc" rows="4" placeholder="Describe the issue…" class="ui-input rf"></textarea></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+selF('Priority','tk-pri',[['Low','Low'],['Medium','Medium'],['High','High']],'Medium')+selF('Send to','tk-route',routeOpts,routeOpts[0][0])+'</div>'
+      +(_caseOpts.length>1?selF('Related client work (optional)','tk-case',_caseOpts,_pre):'')
       +'</div>',
     footer:btnG('Cancel','App.closeModal()')+btnP('Create ticket','App.createTicket()')});
+};
+/* Open the ticket modal preselecting a client's open case (used from the client file). */
+App._newTicketFor=(locId)=>{
+  const c=(DB.checklists||[]).find(x=>x.status!=='Draft'&&(x.locationIds||[]).includes(locId)&&isCase(x)&&!caseSub(x))
+        ||(DB.checklists||[]).find(x=>x.status!=='Draft'&&(x.locationIds||[]).includes(locId));
+  window._tkPreCl=c?c.id:'';
+  App.newTicket();
 };
 App.createTicket=()=>{
   if(!can('tickets','create')){toast('Not allowed','err');return;}
@@ -209,14 +227,15 @@ App.createTicket=()=>{
   else{const hr=DB.users.find(x=>x.hrm?.isHR&&x.status==='Active'&&!isSuperU(x));assignee=hr?hr.id:null;}
   if(!assignee){toast(route==='manager'?'You have no manager assigned':'No active HR user found','err');return;}
   const date=todayISO();
+  const _caseId=$('#tk-case')?.value||null;
   const ticket={id:uid('tk'),title,description,priority,status:'Open',assignedTo:assignee,createdBy:S.uid,
-    checklistId:null,questionId:null,questionText:'',answerGiven:'',submitterId:S.uid,date,
+    checklistId:_caseId,questionId:null,questionText:'',answerGiven:'',submitterId:S.uid,date,
     createdAt:new Date().toISOString(),resolvedAt:null,resolveNote:'',viewedBy:[],
     route /* frontend-only display marker — NOT in the Supabase payload */};
   if(!DB.tickets)DB.tickets=[];
   DB.tickets.unshift(ticket);
   // Mirror the existing escalation insert columns exactly (no `route` column → schema-safe).
-  sb.from('tickets').insert({id:ticket.id,title:ticket.title,description:ticket.description,priority:ticket.priority,status:ticket.status,assigned_to:ticket.assignedTo,created_by:ticket.createdBy,checklist_id:null,question_id:null,question_text:'',answer_given:'',submitter_id:ticket.submitterId,date:ticket.date,created_at:ticket.createdAt,resolved_at:null,resolve_note:'',viewed_by:[]})
+  sb.from('tickets').insert({id:ticket.id,title:ticket.title,description:ticket.description,priority:ticket.priority,status:ticket.status,assigned_to:ticket.assignedTo,created_by:ticket.createdBy,checklist_id:ticket.checklistId||null,question_id:null,question_text:'',answer_given:'',submitter_id:ticket.submitterId,date:ticket.date,created_at:ticket.createdAt,resolved_at:null,resolve_note:'',viewed_by:[]})
     .then(({error})=>{if(error)console.error('[ticket insert]',error.message);}).catch(e=>console.error('[ticket insert failed]',e.message));
   notifyEvent('ticket_assigned',assignee,'🎫 New ticket from '+fullName(me())+': '+title,'tickets',{ticket_title:title});
   saveDB();

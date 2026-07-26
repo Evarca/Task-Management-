@@ -432,6 +432,13 @@ App._setQR=(clId,qId,val,skipRr)=>{
     // answer switch). Number inputs fire per-keystroke, so we must NOT wipe their photo.
     const _q=(DB.questions||[]).find(x=>x.id===qId);
     const _discrete=_q&&_q.type!=='number';
+    // Tapping the already-selected option clears it — you can change your mind before submitting.
+    if(_discrete&&String(existing.response??'')===String(val??'')&&val!==null&&val!==''){
+      existing.response=null;
+      if(!skipRr)rr();
+      clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
+      return;
+    }
     const _changed=String(existing.response??'')!==String(val??'');
     existing.response=val;
     if(_discrete&&_changed){existing.photo=null;existing.photos=[];existing.comment='';}

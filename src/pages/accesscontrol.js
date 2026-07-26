@@ -417,7 +417,7 @@ function _syncRoleProfiles(){
    Resolved with the SAME canUser/role/override rules the app enforces; nothing is switched. */
 const _AC_ROUTES=[
   ['Dashboard & Inbox',[['My Day','dashboard','view'],['Company dashboard','analytics','view'],['Approvals inbox','approvals','view']]],
-  ['Work & Content',[['My checklists',null,null],['Checklist builder','checklists','create'],['All results','allChecklists','view'],['Team view','teamview','view'],['Questions','questions','view'],['Tickets','tickets','view'],['Announcements','announcements','view']]],
+  ['Work & Content',[['My checklists',null,null],['Checklist builder','checklists','create'],['All results','allChecklists','view'],['Team view','teamview','view'],['Questions','questions','view'],['Tickets','tickets','view']]],
   ['People & Org',[['People directory','employees','view'],['Hierarchy','hierarchy','view']]],
   ['Administration',[['Departments','departments','view'],['Clients','locations','view'],['Audit log','audit','view'],['Settings','settings','view'],['Access Control','accessControl','view']]],
 ];

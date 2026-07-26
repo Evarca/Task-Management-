@@ -14,7 +14,7 @@ const W = window;
 // Every route the router knows about, plus the retired ones a stale bookmark could still hit.
 const ROUTES = ['dashboard','mychecklists','users','hierarchy','checklists','allcl','questions',
   'approvals','notifications','analytics','locations','departments','settings','audit','teamview',
-  'profile','accesscontrol','announcements','tickets'];
+  'profile','accesscontrol','tickets'];
 const RETIRED = ['attendance','leave','hrmconfig','hrmanalytics','reports','okr','overtime','shifts',
   'lifecycle','letters','discipline','payroll','surveys','reviews','documents','sops','schedule',
   'myschedule','expenses','nonsense-route'];
@@ -61,7 +61,7 @@ beforeAll(() => {
     assignedTo: null, createdBy: 'em1', submitterId: 'em1', date: today, createdAt: new Date().toISOString(), viewedBy: [] });
   W.DB.notifications.push({ id: 'n1', userId: 'sa1', text: 'Freezer alarm ticket raised', read: false,
     time: new Date().toISOString(), kind: 'ticket' });
-  W.DB.announcements.push({ id: 'an1', title: 'New rota', body: 'Starts Monday', deptTarget: null,
+  if(0)W.DB.announcements.push({ id: 'an1', title: 'New rota', body: 'Starts Monday', deptTarget: null,
     locTarget: null, createdBy: 'sa1', createdAt: new Date().toISOString() });
   W.DB.audit.push({ id: 'lg1', actor: 'Sam Admin', action: 'Created checklist', target: 'Opening checks',
     time: new Date().toISOString() });
