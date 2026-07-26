@@ -117,6 +117,7 @@ function _ansCanDecide(e){
 App._ansSubmit=async(clId,date,qId)=>{
   date=_normD(clId,date); // cases write to the case date, whatever day is on screen
   const c=clById(clId);if(!c)return;
+  if(!isShared(c))return; // individual runs submit as one checklist from the footer
   const q=(DB.questions||[]).find(x=>x.id===qId);if(!q)return;
   const run=RUN[clId]||{};
   const draft=((run.questionResponses)||[]).find(r=>r.questionId===qId)||{};
@@ -141,6 +142,9 @@ App._ansSubmit=async(clId,date,qId)=>{
   if(ap){ap.status='Used';ap.oldResponse=prev?prev.response:null;ap.oldComment=prev?prev.comment:null;
     _pushRow('tm_answer_edits',_ansEditRow(ap),'edit request');}
   log(fullName(me()),prev?'Edited answer':'Submitted answer',c.name+' · '+String(q.text).slice(0,60));
+  // Escalation fires NOW, per answer — a case can stay open for weeks, so waiting for the
+  // final run submit would mean no ticket and no red flag until it is far too late.
+  try{_processEscalations(clId,date,[{questionId:qId,response:resp}]);}catch(e){console.warn('[escalation]',e&&e.message);}
   saveDB();toast(prev?'Answer updated':'Answer submitted');_touchAction();rr();
 
   // Photos taken on the device are base64 — park them in the new bucket and store URLs.

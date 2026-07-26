@@ -291,11 +291,11 @@ function settingsPage(){
   // governed per-checklist and by Access Control. Stale stab==='workflow' falls back to 'inapp'.
   // Old sub-tab names ('inapp', 'email', 'hrmemail', 'workflow') all resolve to the one
   // Notifications tab that replaced them, so a stale link or bookmark still lands somewhere real.
-  const _validTabs=['notif','templates','data'];
+  const _validTabs=['notif','templates'];
   const stab=_validTabs.includes(S.filters.stab)?S.filters.stab:'notif';
   if(!_ns){_loadNS().then(()=>rr());return`<div class="fade">${hdr('Settings','')}${loadingState('Loading settings…')}</div>`;}
   const ns=_ns;
-  const TABS=[['notif','Notifications'],['templates','Templates'],['data','Data']];
+  const TABS=[['notif','Notifications'],['templates','Templates']];
   const tabBar=`<div class="ui-tabs" style="margin-bottom:20px">${TABS.map(([k,ll])=>`<button class="ui-tab${stab===k?' on':''}" onclick="App._setSTab('${k}')">${ll}</button>`).join('')}</div>`;
 
   /* ── NOTIFICATIONS ──
@@ -420,22 +420,9 @@ function settingsPage(){
     toast('Reset to default');rr();
   };
 
-  const dataTab=`<div class="space-y-4">
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
-      <h3 class="fd font-semibold text-sm mb-3">Export & Reset</h3>
-      <div class="flex gap-3 flex-wrap">
-        ${btnG('Export CSV','App._exportCSV()','download')}
-        <button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FED7AA;color:#C2410C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF7ED'" onmouseout="this.style.background='#fff'"><span style="display:inline-flex;align-items:center;gap:7px;justify-content:center">${ic('broom','w-4 h-4')}Clear data</span></button>
-        <button onclick="if(confirm('Reset ALL workspace data?')){localStorage.removeItem(window.LS_KEY||'shiftly_v3');location.reload();}" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button>
-      </div>
-    </div>
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
-      <h3 class="fd font-semibold text-sm mb-3">Workspace stats</h3>
-      <div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Clients',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div>
-    </div>
-  </div>`;
+  // (the Data tab — export / clear / reset — was removed on request; its helpers remain callable)
 
-  const content=stab==='templates'?templatesTab:stab==='data'?dataTab:notifTab;
+  const content=stab==='templates'?templatesTab:notifTab;
   return`<div class="fade">${hdr('Settings','')}${tabBar}${content}</div>`;
 }
 

@@ -19,7 +19,15 @@ login accounts** as the full Evarca deployment.
 
 ## How a checklist run works
 
-This build treats a run as **one shared thing per checklist per day**, not one per person.
+**"Any one assignee can complete" decides the run model** (`isShared` in `src/ui/helpers.js`):
+
+- **Toggle ON, or any One-time client case** → a SHARED run, described below.
+- **Toggle OFF** → an INDIVIDUAL run: every assignee fills in and submits their **own copy** —
+  plain inputs, one Submit button, a teammate's submission never closes yours. No per-question
+  submit, no shared locks, no waiting-status chips (those are shared-run concepts). Escalations
+  still fire from each person's own submission.
+
+A shared run is **one thing per checklist per run**, not one per person.
 
 1. **Each question has its own Submit button.** Answer it, press Submit, and that answer is
    saved and locked with the name of whoever submitted it and the time they did.
@@ -110,6 +118,18 @@ the `locations` permission key are unchanged, so nothing moved in the database �
   details live in a new `tm_client_meta` table — the shared `locations` row keeps exactly the five
   columns it always had, so the full Evarca app sees no change.
 
+## Escalations
+
+An escalation rule on a question (set in the checklist builder's Add Questions step) fires **the
+moment that answer is submitted** — not when the whole run closes. A case can stay open for weeks,
+so waiting would have meant no ticket until far too late. Firing creates the ticket (deduped: an
+open ticket for the same question+checklist is reused, whoever triggers or re-triggers it),
+notifies the escalation target, and the answer turns **red** — on the run card, in All results'
+live view, and on the client file. The client-facing status page never shows escalations.
+
+Settings has two tabs — Notifications and Templates. The old Data tab (export / clear / reset
+workspace) was removed: destructive buttons have no place in a client-facing build.
+
 ## Notifications
 
 `NOTIF_EVENTS` in `src/engine/notifications.js` is the whole list, and it is the only list. Settings
@@ -192,7 +212,7 @@ instead of a blank page (`_RETIRED_ROUTES` in `src/ui/nav.js`).
 npm install       # install dependencies
 npm run dev       # local dev server
 npm run build     # production build into dist/
-npm test          # route sweep + reference audit + behaviour tests (226 assertions)
+npm test          # route sweep + reference audit + behaviour tests (239 assertions)
 ```
 
 ## Deploying
@@ -316,7 +336,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 226 assertions in seven files:
+`npm test` runs 239 assertions in eight files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every

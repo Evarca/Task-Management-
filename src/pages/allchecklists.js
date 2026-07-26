@@ -4,17 +4,19 @@
 function _roResponses(c,sub,date){
   if(!sub){
     // A case / shared run in progress has no submission yet, but it HAS answers — show them.
-    const partial=_ansAll(c.id,date);
+    const partial=isShared(c)?_ansAll(c.id,date):[];
     if(partial.length){
       const qs2=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
       const done2=qs2.filter(q=>{const a=_ansFor(c.id,date,q.id);return a&&a.response!==null&&a.response!=='';}).length;
       return `<div style="padding:12px 16px">
         <div style="font-size:11px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">In progress — ${done2}/${qs2.length} answered${isCase(c)?' (case, open since '+fmtS(caseDate(c))+')':''}</div>
         ${qs2.map(q=>{const a=_ansFor(c.id,date,q.id);const done=!!(a&&a.response!==null&&a.response!=='');const by=done&&a.submittedBy?uById(a.submittedBy):null;
-          return `<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0">
-            <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;${done?'background:#DCFCE7;color:#0B7A55':'background:#F3F4F6;color:#C8C5BD'}">${done?ic('check','w-3 h-3'):''}</span>
+          const escd=done&&_qrEscalates(c,q,a);
+          return `<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0;${escd?'background:#FEF2F2;border-radius:8px;padding-left:6px;padding-right:6px;':''}">
+            <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;${escd?'background:#FEE2E2;color:#B91C1C':done?'background:#DCFCE7;color:#0B7A55':'background:#F3F4F6;color:#C8C5BD'}">${escd?ic('alert','w-3 h-3'):done?ic('check','w-3 h-3'):''}</span>
             <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:${done?'#9CA3AF':'#15171C'}">${esc(q.text)}</span>
-            ${done?`<span style="font-size:11px;font-weight:700;color:#0B7A55">${esc(String(a.response))}</span><span style="font-size:11px;color:#B8B5AC">${by?esc(fullName(by))+' · ':''}${a.submittedAt?new Date(a.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>`
+            ${escd?'<span style="font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:99px;background:#FEE2E2;color:#B91C1C">ESCALATED</span>':''}
+            ${done?`<span style="font-size:11px;font-weight:700;color:${escd?'#B91C1C':'#0B7A55'}">${esc(String(a.response))}</span><span style="font-size:11px;color:#B8B5AC">${by?esc(fullName(by))+' · ':''}${a.submittedAt?new Date(a.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>`
               :_qsBadge(c.id,date,q.id)}
           </div>`;}).join('')}
       </div>`;
@@ -88,7 +90,7 @@ function allClsPage(){
 
   // One read-only expandable card
   const roCard=(c,sub,key,metaExtra)=>{
-    const prog=_ansProgress(c,d);  // live shared-run answers (case-aware) — visible before submission
+    const prog=isShared(c)?_ansProgress(c,d):{done:0,total:(c.questionIds||[]).length,complete:false};  // live counts are a shared-run thing
     const st=sub?sub.status:prog.done?'In progress':(d<today&&!isCase(c)?'Late':_clOverdue(c,d)?'Late':'Pending');
     const exp=S.filters.aclExp===key;
     const ansN=sub?(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length:0;

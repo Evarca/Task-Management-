@@ -780,7 +780,6 @@ function _processEscalations(checklistId,date,responses){
       const existingOpenTicket=(DB.tickets||[]).find(t=>
         t.questionId===q.id&&
         t.checklistId===checklistId&&
-        t.submitterId===S.uid&&
         (t.status==='Open'||t.status==='In Progress')
       );
       if(existingOpenTicket){

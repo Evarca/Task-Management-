@@ -164,7 +164,7 @@ function _renderClModal(editing){
         <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-2">Assign to</label>
         <div class="bg-ink-50 rounded-xl p-3 mb-2">
           ${mkTog('cn-anyone',c.anyOne||false,'Any one assignee can complete')}
-          <p style="font-size:11px;color:#9CA3AF;margin-top:2px">On: one submission by any assignee completes it for everyone. Off: every assignee must submit individually.</p>
+          <p style="font-size:11px;color:#9CA3AF;margin-top:2px">On: ONE shared run — people answer question by question and one submission closes it for everyone. Off: every assignee fills and submits their own copy. (A One-time client case is always worked as one shared run, whatever this switch says.)</p>
         </div>
         <div class="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
           ${cands.map(u=>`<label class="flex items-center gap-2.5 p-2.5 rounded-xl border-2 cursor-pointer transition ${(c.assignees||[]).includes(u.id)?'border-brand-400 bg-brand-50':'border-ink-100 hover:border-ink-200'}">

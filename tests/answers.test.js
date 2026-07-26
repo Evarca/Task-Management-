@@ -37,7 +37,9 @@ function seed() {
   W.DB.checklists.push({ id: 'c1', name: 'Opening checks', description: '', department: 'Ops',
     frequency: 'Daily', selectedDays: [], selectedDates: [], customDates: [], locationIds: [],
     assignees: ['ana', 'ben'], tasks: [], questionIds: ['q1', 'q2'], questionConfigs: {},
-    scheduleTime: null, status: 'Active', anyOne: false, createdBy: 'boss' });
+    // These suites describe the SHARED-run behaviour, which since round 7 is what the
+    // "Any one assignee can complete" toggle switches on (cases are always shared).
+    scheduleTime: null, status: 'Active', anyOne: true, createdBy: 'boss' });
   W.DB.locations.push({ id: 'l1', name: 'Main Store', address: '', department: '', status: 'Active' });
   W.log = () => {};
   W._ns = W._nsDefault();

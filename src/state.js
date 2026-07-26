@@ -267,6 +267,7 @@ const subForCl=(c,uid,date)=>{
   date=effDate(c,date); // a case has ONE run date no matter which day you look from
   const own=subFor(c.id,uid,date);
   if(own)return own;
+  if(!isShared(c))return null;               // individual: a teammate's submission is NOT yours
   return DB.submissions.find(s=>s.checklistId===c.id&&s.date===date&&s.status!=='Editing')||null;
 };
 // Any submission for this run regardless of who made it or its state (used by the run guard).

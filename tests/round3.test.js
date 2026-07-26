@@ -228,12 +228,12 @@ describe('4 — every list can be filtered by Client', () => {
 });
 
 describe('5 — Settings shows each switch once', () => {
-  it('has three tabs, none of them a duplicate channel list', () => {
+  it('has two tabs, none of them a duplicate channel list', () => {
     W.S.uid = 'boss'; W.S.route = 'settings'; W.S.filters = {};
     const html = W.pageContent();
     expect(html).toContain('>Notifications<');
     expect(html).toContain('>Templates<');
-    expect(html).toContain('>Data<');
+    expect(html).not.toContain('>Data<');   // export/clear/reset removed on request
     expect(html).not.toContain('>In-App<');
     expect(html).not.toContain('>HR Email<');
     expect(html).not.toContain('>Feature switches<');

@@ -234,9 +234,11 @@ function _locProgTab(l){
       const st=!done?_qStatusOf(c.id,cd,q.id):null;
       const wc=st&&st.status==='waiting_client';
       const ng=wc?lastNudge(q.id,c.id):null;
+      const escd=done&&_qrEscalates(c,q,a);
       return `<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--c-border)">
-        <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${done?'background:#DCFCE7;color:#0B7A55':'background:var(--c-surface-2);color:var(--c-text-3)'}">${done?ic('check','w-3 h-3'):(q===next?ic('chevR','w-3 h-3'):'')}</span>
+        <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${escd?'background:#FEE2E2;color:#B91C1C':done?'background:#DCFCE7;color:#0B7A55':'background:var(--c-surface-2);color:var(--c-text-3)'}">${escd?ic('alert','w-3 h-3'):done?ic('check','w-3 h-3'):(q===next?ic('chevR','w-3 h-3'):'')}</span>
         <span style="flex:1;min-width:0;font-size:13px;font-weight:${q===next?'800':'600'};color:${done?'var(--c-text-2)':'var(--c-text)'}">${esc(q.text)}${q===next&&!cs?' <span style="font-size:9.5px;font-weight:800;color:#4338CA;background:#EEF2FF;padding:1px 7px;border-radius:99px;vertical-align:middle">NEXT UP</span>':''}</span>
+        ${escd?'<span style="font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:99px;background:#FEE2E2;color:#B91C1C;flex-shrink:0">ESCALATED</span>':''}
         ${done?`<span style="font-size:11px;color:var(--c-text-3);flex-shrink:0">${by?esc(fullName(by))+' · ':''}${a.submittedAt?new Date(a.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>`
           :(st?_qsBadge(c.id,cd,q.id):'')}
         ${wc&&m.contactEmail&&canEdit?`<button onclick="App._nudgeClient('${l.id}','${c.id}','${q.id}')" title="${ng?'Last nudged '+new Date(ng.sentAt).toLocaleString('en-GB',{day:'numeric',month:'short'}):'Email the client a reminder about this'}" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px;flex-shrink:0">${ic('mail','w-3 h-3')} Nudge${ng?'d '+new Date(ng.sentAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</button>`:''}

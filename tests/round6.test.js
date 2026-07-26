@@ -190,3 +190,77 @@ describe('7 — Team is just the team', () => {
     expect(html).not.toContain('All clients');
   });
 });
+
+/* ═══ 8 — escalations fire per answer, and everything goes red ═══ */
+describe('8 — escalation on answer submit', () => {
+  function mkEscCase() {
+    // q2 "MOA signed?" escalates to boss when answered "No" (yes/no → opt_1 is No)
+    return mkCase({ questionConfigs: { q2: { opt_1: 'boss' } } });
+  }
+  const draft = (c, qid, val) => {
+    W.RUN[c.id] = { checklistId: c.id, userId: W.S.uid, date: TODAY, tasks: [], questionResponses: [] };
+    W.App._setQR(c.id, qid, val, true);
+  };
+
+  it('creates the ticket the moment the escalating answer is submitted', async () => {
+    const c = mkEscCase();
+    W.S.uid = 'ana';
+    draft(c, 'q2', 'No');
+    await W.App._ansSubmit(c.id, TODAY, 'q2');
+    const t = W.DB.tickets.find(x => x.questionId === 'q2' && x.checklistId === c.id);
+    expect(t).toBeTruthy();
+    expect(t.status).toBe('Open');
+    expect(t.assignedTo).toBe('boss');
+    expect(t.priority).toBe('High');            // "No" reads as high priority
+    expect(t.answerGiven).toBe('No');
+    // and boss heard about it
+    expect(W.DB.notifications.some(n => n.userId === 'boss' && /Escalation/.test(n.text))).toBe(true);
+  });
+
+  it('does not duplicate the ticket when the run is later submitted — even by someone else', async () => {
+    const c = mkEscCase();
+    W.S.uid = 'ana';
+    draft(c, 'q2', 'No');
+    await W.App._ansSubmit(c.id, TODAY, 'q2');
+    draft(c, 'q1', 'Yes');
+    await W.App._ansSubmit(c.id, TODAY, 'q1');
+    expect(W.DB.tickets.length).toBe(1);
+    W.S.uid = 'boss';                            // a different person closes the run
+    await W.App._submitRun(c.id, TODAY);
+    expect(W.DB.tickets.filter(x => x.questionId === 'q2' && x.checklistId === c.id).length).toBe(1);
+  });
+
+  it('a non-escalating answer raises nothing', async () => {
+    const c = mkEscCase();
+    W.S.uid = 'ana';
+    draft(c, 'q2', 'Yes');
+    await W.App._ansSubmit(c.id, TODAY, 'q2');
+    expect(W.DB.tickets.length).toBe(0);
+  });
+
+  it('the locked card, All results and the client file all mark it red', async () => {
+    const c = mkEscCase();
+    W.S.uid = 'ana';
+    draft(c, 'q2', 'No');
+    await W.App._ansSubmit(c.id, TODAY, 'q2');
+    const card = W._qCard(c, W.DB.questions.find(q => q.id === 'q2'), TODAY, false);
+    expect(card).toContain('ESCALATED');
+    expect(card).toContain('#FEF2F2');           // red container
+    const detail = W._roResponses(c, null, TODAY);
+    expect(detail).toContain('ESCALATED');
+    const file = W._locProgTab(W.DB.locations[0]);
+    expect(file).toContain('ESCALATED');
+  });
+});
+
+/* ═══ 9 — the Data tab is gone ═══ */
+describe('9 — settings without the Data tab', () => {
+  it('offers Notifications and Templates only, and a stale #data link falls back', () => {
+    W.S.route = 'settings'; W.S.filters = { stab: 'data' };
+    const html = W.settingsPage();
+    expect(html).not.toContain('>Data<');
+    expect(html).not.toContain('Reset workspace');
+    expect(html).toContain('>Notifications<');
+    expect(html).toContain('>Templates<');
+  });
+});
