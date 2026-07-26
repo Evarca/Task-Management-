@@ -113,6 +113,31 @@ function _reportScopeIds(){const s=new Set(scopedUsers('reports').map(u=>u.id));
    For a business-setup company the question is never "how did employees do" but "where does
    each client stand". One row per client with live case work: average progress, what's blocked,
    what's overdue, the next deadline. Tap a row for the full client file. */
+/* ── Billing at a glance (round 9): only for people who can see money ── */
+function _billingStrip(){
+  if(typeof canBillView!=='function'||!canBillView())return'';
+  const ids=Object.keys(DB.tmBilling||{});
+  const anyPay=(DB.tmPayments||[]).length;
+  if(!ids.length&&!anyPay)return'';
+  const ym=todayISO().slice(0,7);
+  let totalV=0,paidV=0;
+  ids.forEach(id=>{const b=DB.tmBilling[id];totalV+=Number(b.total)||0;});
+  (DB.tmPayments||[]).forEach(p=>{paidV+=Number(p.amount)||0;});
+  const outstanding=Math.max(0,totalV-paidV);
+  const collectedM=(DB.tmPayments||[]).filter(p=>String(p.paidOn||'').slice(0,7)===ym).reduce((a,p)=>a+(Number(p.amount)||0),0);
+  const invsM=(DB.tmInvoices||[]).filter(v=>v.status!=='Void'&&String(v.issuedOn||'').slice(0,7)===ym);
+  const cur=_invDefaults().currency||'AED';
+  const tile=(lbl,val,color)=>`<div onclick="S.route='locations';render()" style="flex:1;min-width:150px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;box-shadow:var(--sh-sm);padding:10px 14px;cursor:pointer">
+    <div style="font-size:9.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em">${lbl}</div>
+    <div style="font-size:16.5px;font-weight:800;margin-top:2px;color:${color||'var(--c-text)'}">${esc(val)}</div></div>`;
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    ${tile('Engagements total',fmtMoney(totalV,cur))}
+    ${tile('Collected — all time',fmtMoney(paidV,cur),'#0B7A55')}
+    ${tile('Outstanding',fmtMoney(outstanding,cur),outstanding>0?'#B45309':'#0B7A55')}
+    ${tile('Collected this month',fmtMoney(collectedM,cur),'#0B7A55')}
+    ${tile('Invoices this month',invsM.length+(invsM.length?' · '+fmtMoney(invsM.reduce((a,v)=>a+(Number(v.total)||0),0),cur):''))}
+  </div>`;
+}
 function _clientCasesSection(){
   const today=todayISO();
   const rows=[];
@@ -295,6 +320,7 @@ function analyticsPage(){
   return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
   ${hdr('Company',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${typeof _pulseStrip==='function'?_pulseStrip():''}
+  ${_billingStrip()}
   ${_clientCasesSection()}
   ${typeof _clOverviewWidget==='function'?_clOverviewWidget(today):''}
   <!-- Filter bar -->
@@ -440,4 +466,4 @@ function _csvDownload(rows,filenamePrefix){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._reportScopeIds=_reportScopeIds;window.analyticsPage=analyticsPage;window._clientCasesSection=_clientCasesSection;window._csvDownload=_csvDownload;
+window._reportScopeIds=_reportScopeIds;window.analyticsPage=analyticsPage;window._billingStrip=_billingStrip;window._clientCasesSection=_clientCasesSection;window._csvDownload=_csvDownload;

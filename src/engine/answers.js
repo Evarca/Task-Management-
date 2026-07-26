@@ -129,6 +129,11 @@ App._ansSubmit=async(clId,date,qId)=>{
   if(q.photo&&!_qrHasPhoto(draft)){toast('A photo is required for this question','err');return;}
   if(q.comment&&!(draft.comment||'').trim()){toast('A comment is required for this question','err');return;}
 
+  // R9: submitting the answer also commits whatever is in the question's "Cost used" box,
+  // so a typed-but-not-blurred amount can never be lost on submit.
+  try{const _ce=document.getElementById('qc-'+clId+'-'+qId);
+    if(_ce&&String(_ce.value).trim()!==''&&String(Number(_ce.value))!==String((_qCostOf(clId,date,qId)||{}).amount??''))App._qCostSet(clId,date,qId,_ce.value);
+  }catch(e){}
   const id=_ansId(clId,date,qId);
   const nowISO=new Date().toISOString();
   const rec={id,checklistId:clId,date,questionId:qId,response:resp,comment:draft.comment||'',
@@ -322,11 +327,17 @@ App._setQStatus=(clId,date,qId,status)=>{
   if(cur&&cur.status===status){ // tapping the active chip clears it back to Not started
     delete DB.tmQStatus[key];
     sb.from('tm_q_status').delete().eq('id',key).then(()=>{}).catch(()=>{});
+    if(status==='waiting_client')try{_waitNoteClear(clId,date,qId);}catch(e){} // the note rode with the flag
   }else{
+    const was=cur&&cur.status;
     DB.tmQStatus[key]={status,changedBy:S.uid,changedAt:new Date().toISOString()};
     sb.from('tm_q_status').upsert({id:key,checklist_id:clId,run_date:date,question_id:qId,
       status,changed_by:S.uid,changed_at:new Date().toISOString()},{onConflict:'id'})
       .then(({error})=>{if(error)_syncErr('question status')(error);}).catch(_syncErr('question status'));
+    if(was==='waiting_client'&&status!=='waiting_client')try{_waitNoteClear(clId,date,qId);}catch(e){}
+    // R9: marking something Waiting on client immediately asks WHAT we're waiting for —
+    // that one line is what the client sees on their status page next to the item.
+    if(status==='waiting_client')try{saveDB();rr();App._waitNoteAsk(clId,date,qId);return;}catch(e){}
   }
   saveDB();rr();
 };
@@ -334,12 +345,13 @@ App._setQStatus=(clId,date,qId,status)=>{
 function _qsBadge(clId,date,qId){
   const st=_qStatusOf(clId,date,qId);if(!st)return'';
   const days=_qsDays(st);
+  const wn=st.status==='waiting_client'?(typeof _waitNoteOf==='function'?_waitNoteOf(clId,date,qId):null):null;
   const tone=st.status==='in_progress'
     ?'background:var(--c-info-soft);color:var(--c-info)'
     :st.status==='waiting_client'
     ?'background:#FEF3C7;color:#92400E'
     :'background:#EDE9FE;color:#5B21B6';
-  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;${tone}">`
+  return `<span ${wn&&wn.note?`title="Waiting for: ${esc(wn.note)}"`:''} style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;${tone}">`
     +esc(QS_LABEL[st.status]||st.status)+(st.status!=='in_progress'&&days>0?' · '+days+'d':'')+'</span>';
 }
 function _qsApply(rows){
@@ -350,11 +362,29 @@ async function _qsLoad(){
   try{
     // Recent window + the case dates of every open One-time checklist (they can be months old).
     const from=new Date(Date.now()-35*86400000).toISOString().slice(0,10);
+    const _t0=Date.now(); // rows written locally AFTER this can't be in the snapshot below
     const caseDates=[...new Set((DB.checklists||[]).filter(c=>isCase(c)).map(c=>caseDate(c)))];
     const qs=[sb.from('tm_q_status').select('*').gte('run_date',from)];
     if(caseDates.length)qs.push(sb.from('tm_q_status').select('*').in('run_date',caseDates));
     const rs=await Promise.all(qs);
     rs.forEach(r=>{if(!r.error)_qsApply(r.data);});
+    // R9 FIX: statuses are also DELETED server-side — by tm_client_respond (the client answered)
+    // and by colleagues clearing a chip. _qsApply only merges, so a cleared flag used to survive
+    // locally (and in localStorage) forever. Reconcile: inside the windows just fetched, any local
+    // row the server no longer has is gone. Only when every query succeeded — a network error
+    // must never wipe good state.
+    if(rs.every(r=>!r.error)){
+      const seen=new Set();rs.forEach(r=>(r.data||[]).forEach(x=>seen.add(x.id)));
+      const inWin=d=>d>=from||caseDates.includes(d);
+      Object.keys(DB.tmQStatus||{}).forEach(k=>{
+        if(!inWin(String(k).split('|')[1])||seen.has(k))return;
+        // in-flight guard: a chip set moments ago has an optimistic local row whose upsert may
+        // not have landed when this SELECT ran — never purge anything newer than the fetch start
+        const rec=DB.tmQStatus[k];
+        if(rec&&rec.changedAt&&Date.parse(rec.changedAt)>=_t0-15000)return;
+        delete DB.tmQStatus[k];
+      });
+    }
   }catch(e){console.warn('[q status] load skipped:',e&&e.message);}
 }
 

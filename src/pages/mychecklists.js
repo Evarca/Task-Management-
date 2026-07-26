@@ -122,6 +122,7 @@ function homeDash(){
       </div>
     </div>
     ${(isMgr()||can('teamview','view'))?_clOverviewWidget(today):''}
+    ${_clientRepliesWidget()}
     ${tiles?`<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Needs you</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${tiles}</div>`:''}
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Today</div>
     <div class="grid md:grid-cols-2 gap-4 items-start" style="margin-bottom:16px">${clCard}${tkCard}</div>
@@ -417,7 +418,7 @@ function _qCard(c,q,date,runSubmitted){
     const canApprove=can('checklists','approve')||isAdmin();
     const photos=_qrPhotoList(ans);
     const escd=_qrEscalates(c,q,ans);   // this answer tripped an escalation rule
-    return`<div style="background:${escd?'#FEF2F2':'#F7FBF9'};border:1px solid ${escd?'#FECACA':'#CFEBDF'};border-radius:12px;padding:12px 14px">
+    return`<div style="background:${escd?'#FEF2F2':'#F7FBF9'};border:1px solid ${escd?'#FECACA':'#CFEBDF'};border-radius:11px;padding:10px 12px">
       ${hdr}
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:800;color:${escd?'#B91C1C':'#0B7A55'}">${escd?ic('alert','w-4 h-4'):ic('check','w-4 h-4')}${esc(String(resp??'—'))}</span>
@@ -465,7 +466,7 @@ function _qCard(c,q,date,runSubmitted){
     +'</label></div>';
 
   const ready=resp!==null&&resp!==undefined&&resp!=='';
-  return`<div style="background:#FAFAFA;border:1px solid ${unlocked?'#BFDBFE':'#ECEDF0'};border-radius:12px;padding:12px 14px">
+  return`<div style="background:#FAFAFA;border:1px solid ${unlocked?'#BFDBFE':'#ECEDF0'};border-radius:11px;padding:10px 12px">
     ${hdr}
     ${unlocked?`<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#1D4ED8;background:#EFF6FF;border-radius:8px;padding:5px 9px;margin-bottom:9px">${ic('edit','w-3 h-3')}Unlocked for editing — submit again when you're done</div>`:''}
     ${inputHtml}
@@ -474,11 +475,18 @@ function _qCard(c,q,date,runSubmitted){
       <span style="font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.05em">Status</span>
       ${(()=>{const st=_qStatusOf(c.id,date,q.id);const cur=st&&st.status;
         const chips=[['in_progress','In progress','#1D4ED8','#EFF6FF','#BFDBFE'],['waiting_client','Waiting on client','#92400E','#FFFBEB','#FDE68A'],['waiting_authority','Waiting on authority','#5B21B6','#F5F3FF','#DDD6FE']];
-        return chips.map(([k,l,fg,bg,bd])=>`<button type="button" onclick="App._setQStatus('${c.id}','${date}','${q.id}','${k}')" title="${cur===k?'Tap again to clear':'Mark: '+l}" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid ${cur===k?fg:'#E5E7EB'};background:${cur===k?bg:'#fff'};color:${cur===k?fg:'#9CA3AF'}">${l}</button>`).join('')
+        return chips.map(([k,l,fg,bg,bd])=>`<button type="button" onclick="App._setQStatus('${c.id}','${date}','${q.id}','${k}')" title="${cur===k?'Tap again to clear':'Mark: '+l}" style="font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;cursor:pointer;border:1.5px solid ${cur===k?fg:'#E5E7EB'};background:${cur===k?bg:'#fff'};color:${cur===k?fg:'#9CA3AF'}">${l}</button>`).join('')
           +(cur&&cur!=='in_progress'?`<span style="font-size:10.5px;color:#92400E;font-weight:700">${esc(_qsDur(_qStatusOf(c.id,date,q.id))||'0h')}</span>`:'')
           +(()=>{const rep=!cur?_replyForQ(c.id,date,q.id):null;
             return rep?`<span title="${esc(rep.message||(rep.kind==='document'?'Documents received — see the client file':'Confirmed by the client'))}" style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:99px;background:#DBEAFE;color:#1D4ED8">CLIENT REPLIED ${esc(_agoLabel(rep.submittedAt).toUpperCase())}${(rep.files||[]).length?' · '+(rep.files||[]).length+' FILE'+((rep.files||[]).length===1?'':'S'):''}</span>`:'';})();})()}
     </div>
+    ${(()=>{const st2=_qStatusOf(c.id,date,q.id);if(!st2||st2.status!=='waiting_client')return'';
+      const wn=_waitNoteOf(c.id,date,q.id);
+      return `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11.5px;color:#92400E;background:#FFFBEB;border:1px dashed #FDE68A;border-radius:8px;padding:4px 9px">
+        ${wn&&wn.note?`<span style="flex:1;min-width:0">Waiting for: <b>${esc(wn.note)}</b> <span style="opacity:.65">— shown to the client on their link</span></span>`
+          :'<span style="flex:1;min-width:0;opacity:.8">Tell the client what you\'re waiting for — it shows on their status link.</span>'}
+        <button type="button" onclick="App._waitNoteAsk('${c.id}','${date}','${q.id}')" style="font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:7px;border:1px solid #FDE68A;background:#fff;color:#92400E;cursor:pointer;flex-shrink:0">${wn&&wn.note?'Edit':'Add'}</button>
+      </div>`;})()}
     ${_qCostRow(c,q,date)}
     <div style="display:flex;justify-content:flex-end;margin-top:9px">
       <button ${ready?'':'disabled'} onclick="App._ansSubmit('${c.id}','${date}','${q.id}')" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;padding:8px 16px;border-radius:9px;border:none;cursor:${ready?'pointer':'not-allowed'};background:${ready?'#0E9F6E':'#E5E7EB'};color:${ready?'#fff':'#9CA3AF'}">${ic('check','w-3.5 h-3.5')}${unlocked?'Submit change':'Submit answer'}</button>
@@ -673,14 +681,14 @@ function _qCostRow(c,q,date){
   if(!mine&&!canBill())return'';
   const qc=_qCostOf(c.id,date,q.id);
   const cur=_cliCurrency((c.locationIds||[])[0]);
-  return `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;padding-top:7px;border-top:1px dashed #E5E7EB">
-    <span style="font-size:10px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.05em">${ic('receipt','w-3 h-3 inline')} Cost used</span>
+  return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px dashed #E5E7EB">
+    <span style="font-size:9.5px;font-weight:800;color:#B8B5AC;text-transform:uppercase;letter-spacing:.05em">${ic('receipt','w-3 h-3 inline')} Cost used</span>
     <span style="font-size:11.5px;font-weight:700;color:#6B7280">${esc(cur)}</span>
-    <input type="number" min="0" step="any" value="${qc&&qc.amount>0?qc.amount:''}" placeholder="0"
+    <input type="number" min="0" step="any" id="qc-${c.id}-${q.id}" value="${qc&&qc.amount>0?qc.amount:''}" placeholder="0"
       onchange="App._qCostSet('${c.id}','${date}','${q.id}',this.value)"
       onkeydown="if(event.key==='Enter')this.blur()"
-      style="width:110px;padding:5px 10px;border-radius:8px;border:1.5px solid #E5E7EB;font-size:12.5px;outline:none" aria-label="Money utilized on this question"/>
-    <span style="font-size:11px;color:#B8B5AC">how much was utilized on this item${qc&&qc.setAt?' · saved '+esc(_agoLabel(qc.setAt)):''}</span>
+      style="width:100px;padding:4px 9px;border-radius:8px;border:1.5px solid #E5E7EB;font-size:12px;outline:none" aria-label="Money utilized on this question"/>
+    <span style="font-size:10.5px;color:#B8B5AC">utilized on this item${qc&&qc.setAt?' · saved '+esc(_agoLabel(qc.setAt)):''} — saved with the answer too</span>
   </div>`;
 }
 

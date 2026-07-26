@@ -65,9 +65,9 @@ days until every question is answered and it is submitted, then it closes. Pick 
   the creator plus every assignee's manager are told once a day. A case with no deadline is
   never late.
 - Once answers exist, the start date is locked (moving it would orphan the recorded answers).
-- **Templates**: "Save as template" in the editor keeps the question list; creating a new
-  checklist then offers "Start from a template" — new client case in seconds. Templates live in
-  the new `tm_templates` table.
+- ~~Templates~~ — **removed in round 9** on request. The "Save as template" / "Start from a
+  template" pair is gone from the builder; the `tm_templates` table itself is untouched, so any
+  rows in it simply sit unused.
 
 Every question on an open run also carries a **working status** the team sets with one tap:
 *In progress*, *Waiting on client*, *Waiting on authority* (tap again to clear; submitting the
@@ -144,13 +144,48 @@ onto the invoice at issue time**, so editing the template later never rewrites a
 was already sent. View / print opens a standalone print window (browser print → PDF). Voiding
 keeps the invoice on file with a VOID watermark; numbers are never reused.
 
-**Permission:** everything money sits behind a new granular action — **Clients → Billing &
-invoices** (`locations.billing`). Role seeds are at v11: superadmin/admin re-seed WITH it, every
-other role has it OFF until it is granted in Access Control. The RLS on every billing table
+**Permission:** everything money sits behind granular actions on Clients. Round 9 split it in
+two — **Billing — view** (`locations.billingView`: see totals / paid / balance / utilized,
+open invoices) and **Billing — manage** (`locations.billing`: record payments, generate/void
+invoices, edit the template and totals). Role seeds are at v12: superadmin/admin re-seed WITH
+both, every other role has them OFF until granted in Access Control. The RLS on every billing table
 enforces the same rule server-side (`_can('locations','billing') OR _is_elevated()`), so the
 gate is real even against the raw API. The one deliberate exception: the per-question **cost**
 can also be written by that run's assignees (`tm_q_costs` RLS checks the checklist's assignee
 list) — entering what a step cost is part of doing the step.
+
+## Round 9 — the polish round
+
+- **"What are we waiting for?"** Tapping *Waiting on client* now immediately asks for one line
+  ("Passport copies of all three partners"). It lives in the new `tm_wait_notes` table, shows on
+  the run card, the client file's blocked list, the badge tooltip — and on the CLIENT's status
+  page right under the item, so a nudge is never vague. It clears automatically when the client
+  responds, when the flag is cleared, or when the status moves on.
+- **Cleared flags actually clear everywhere.** `tm_client_respond` deletes the status row, but
+  the loaders only ever merged — so a badge cleared server-side haunted other devices (and their
+  localStorage) forever. `_qsLoad`/`_qcLoad` now reconcile deletions inside the windows they
+  fetch (and only when every query succeeded, so a network blip can't wipe good state). On top,
+  landing on My Checklists or a client file refreshes replies + statuses + costs, so the
+  amber badge swaps to the blue **CLIENT REPLIED** chip without a manual reload.
+- **Costs commit with the answer.** The per-question "Cost used" box saves on change AND is
+  flushed by the answer's Submit button, so a typed-but-not-blurred amount can never be lost.
+- **Invoice numbers are visibly automatic** — the Generate dialog shows the upcoming number
+  (INV-0008, from the settings counter) as read-only text; allocation stays atomic in the RPC.
+- **The invoice document was redesigned**: top accent bar, logo + company block, light INVOICE
+  masthead with an ISSUED / PAID / VOID pill, a Billed-to / Details band, right-aligned totals
+  stack, quiet terms + footer. Still one self-contained page; print → PDF.
+- **Billing split into view/manage** (see the permission note above) and the money tables'
+  SELECT policies accept the view action server-side.
+- **Two new notification events** — *Payment recorded* and *Invoice generated* (group: Billing)
+  — go to everyone who can manage billing, minus whoever did it. Both channels, switches in
+  Settings, email off by default.
+- **Billing surfaced where you look**: the Clients table gained a *Balance due* column (billing
+  eyes only), the Company dashboard a five-tile billing strip (engagements, collected, outstanding,
+  this month, invoices), and all three dashboards a compact **"Clients responded"** card linking
+  straight to the client file.
+- **A general compaction pass** over My Checklists cards, Tickets, the client file and the
+  Billing tab — smaller paddings, tighter chips, denser rows.
+- **Save as template removed** (see Cases above).
 
 ## Clients
 
@@ -312,6 +347,7 @@ project (see `.env.example`).
 | `tm_q_costs` | one row per (checklist, date, question) — the money utilized on that step |
 | `tm_share_prefs` | per-client link switches: can respond, show tickets, show billing |
 | `tm_client_replies` | what the client sent back through the status link (reply / confirm / documents) |
+| `tm_wait_notes` | the one-liner "what we're waiting for" that rides with a Waiting-on-client flag |
 
 **New storage buckets:** `tm-location-docs` (private, 25 MB cap, served via 5-minute signed URLs)
 and `tm-answer-photos` (public-read with unguessable paths, 10 MB cap, so answer thumbnails render
@@ -408,7 +444,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 269 assertions in nine files:
+`npm test` runs 281 assertions in ten files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every
@@ -445,6 +481,12 @@ hover. Theme lives in `src/ui/charts.js`.
   in days+hours, the respond box (reply shape, confirm, empty-send refusal, cache-rendered open,
   dead-link page), the team-side CLIENT REPLIED chips, and the `client_responded` event honouring
   every switch.
+- **`tests/round9.test.js`** — the polish round: templates truly gone from source and editor,
+  the previewed auto invoice number, the cost box committing with Submit, the waiting note
+  (asked on flag, shown on badge/file/status page, cleared on clear/move/respond), the
+  server-deletion reconcile in `_qsLoad`, view-vs-manage billing gating on the tab and the
+  clients list, the two Billing events with honoured switches and actor-skipping fan-out, and
+  the dashboard strip + "Clients responded" card visibility.
 
 Both matter more than usual here, because cross-file references resolve through `window` at call
 time — `vite build` will happily build an app whose buttons throw when clicked.

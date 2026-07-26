@@ -52,7 +52,9 @@ window.DB={
   //    tmQCosts         {'<cl>|<date>|<q>': {amount, setBy, setAt}} — utilized per question
   //    tmSharePrefs     {clientId: {showTickets, showBilling, allowRespond}} — per-link switches
   //    tmClientReplies  what the client sent back through the status link
-  tmBilling:{},tmPayments:[],tmInvoices:[],tmInvoiceSettings:null,tmQCosts:{},tmSharePrefs:{},tmClientReplies:[]
+  tmBilling:{},tmPayments:[],tmInvoices:[],tmInvoiceSettings:null,tmQCosts:{},tmSharePrefs:{},tmClientReplies:[],
+  //    tmWaitNotes      {'<cl>|<date>|<q>': {note, setBy, setAt}} — what we're waiting for from the client
+  tmWaitNotes:{}
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -133,6 +135,7 @@ function loadDB(){
     if(!DB.tmQCosts||typeof DB.tmQCosts!=='object')DB.tmQCosts={};
     if(!DB.tmSharePrefs||typeof DB.tmSharePrefs!=='object')DB.tmSharePrefs={};
     if(!Array.isArray(DB.tmClientReplies))DB.tmClientReplies=[];
+    if(!DB.tmWaitNotes||typeof DB.tmWaitNotes!=='object')DB.tmWaitNotes={};
     // OKR v2 migration: drop the retired question-linked OKR model from stale localStorage.
     // Old rows are recognisable by having no metricType (they carried questionId/rollup instead).
     DB.okrs=(DB.okrs||[]).filter(o=>o&&o.metricType);

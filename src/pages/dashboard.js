@@ -264,7 +264,7 @@ function adminDash(){
     return{name:d.name,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};
   }).filter(d=>d.cls||d.total);
   const recent=fSubs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,8);
-  return`<div class="fade">${_clOverviewWidget(today)}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
+  return`<div class="fade">${_clOverviewWidget(today)}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}${_clientRepliesWidget()}
   ${_dashFilterBar()}
   ${_pulseStrip()}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
@@ -294,7 +294,7 @@ function mgrDash(){
   const rows=_clOverview(today);
   const overdue=rows.filter(r=>r.state==='Overdue').length;
   const openTk=(DB.tickets||[]).filter(t=>(t.status==='Open'||t.status==='In Progress')&&team.some(u=>u.id===t.assignedTo)).length;
-  return`<div class="fade">${_clOverviewWidget(today)}${hdr('Team Dashboard',team.length+' member'+(team.length!==1?'s':''))}
+  return`<div class="fade">${_clOverviewWidget(today)}${hdr('Team Dashboard',team.length+' member'+(team.length!==1?'s':''))}${_clientRepliesWidget()}
   ${_dashFilterBar()}
   ${_pulseStrip()}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">

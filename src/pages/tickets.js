@@ -68,8 +68,8 @@ function ticketsPage(){
     const cl=clById(t.checklistId);
     const canResolve=isAdmin()||(isMgr()&&subTree(S.uid).some(u=>u.id===t.submitterId||u.id===t.assignedTo))||(t.assignedTo===S.uid);
     const canDelete=isAdmin();
-    return'<div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:16px;border-left:4px solid '+(priClr[t.priority]||'#9CA3AF')+'">'+
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">'+
+    return'<div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:11px 14px;border-left:3px solid '+(priClr[t.priority]||'#9CA3AF')+'">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px">'+
         '<div style="flex:1;min-width:0">'+
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">'+
             '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:'+(priBg[t.priority]||'#F9FAFB')+';color:'+(priClr[t.priority]||'#6B7280')+'">'+esc(t.priority)+'</span>'+
@@ -79,7 +79,7 @@ function ticketsPage(){
             (cl?'<span style="font-size:11px;color:var(--c-text-3)">'+esc(cl.name)+'</span>':'')+
             '<span style="font-size:11px;color:var(--c-text-3)">'+fmtS(t.date||t.createdAt?.slice(0,10)||'')+'</span>'+
           '</div>'+
-          '<div style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:4px">'+esc(t.title)+'</div>'+
+          '<div style="font-size:13.5px;font-weight:700;color:var(--c-text);margin-bottom:3px">'+esc(t.title)+'</div>'+
           '<div style="font-size:12px;color:var(--c-text-2);line-height:1.5;white-space:pre-wrap">'+esc(t.description)+'</div>'+
           // Show photo from the linked submission's question response
           (()=>{

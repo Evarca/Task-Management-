@@ -3,7 +3,7 @@
 /* ===== LOCATIONS ===== */
 function locsPage(){
   const sel=S.filters.locSel||null;
-  if(S.filters.locTab==='bill'&&!canBill())S.filters.locTab='prog'; // billing is permission-gated
+  if(S.filters.locTab==='bill'&&!canBillView())S.filters.locTab='prog'; // billing is permission-gated
   const stab=S.filters.locTab||'prog';
   // ── Detail view ──
   if(sel){
@@ -12,7 +12,7 @@ function locsPage(){
     // Requirement #6: block opening a city outside the user's city scope — but NEVER for admins
     // (an admin with old client chips must not lose access to a client they just created).
     if(!isAdmin()){const _mc=myCityScope();if(_mc.length&&!_mc.includes(l.id)){S.filters.locSel=null;toast('You do not have access to this client','warn');return locsPage();}}
-    const TABS=[['prog',ic('chart','w-4 h-4')+'Progress'],...(canBill()?[['bill',ic('receipt','w-4 h-4')+'Billing']]:[]),['docs',ic('folder','w-4 h-4')+'Documents'],['info',ic('info','w-4 h-4')+'Info']];
+    const TABS=[['prog',ic('chart','w-4 h-4')+'Progress'],...(canBillView()?[['bill',ic('receipt','w-4 h-4')+'Billing']]:[]),['docs',ic('folder','w-4 h-4')+'Documents'],['info',ic('info','w-4 h-4')+'Info']];
     return'<div class="fade">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
       +'<button onclick="App._closeLoc()" style="width:34px;height:34px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;display:grid;place-items:center;color:#6B7280">'+ic('back','w-4 h-4')+'</button>'
@@ -74,7 +74,7 @@ function locsPage(){
         const st=_qStatusOf(c.id,cd,q.id);if(st&&st.status!=='in_progress')_blk++;});});
     const _avg=_oc.length?Math.round(_pctSum/_oc.length*100):0;
     return `<tr class="hover:bg-ink-50/50" style="cursor:pointer" onclick="App._openLoc('${l.id}')">
-      <td class="px-4 py-3">
+      <td class="px-4 py-2.5">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="width:32px;height:32px;border-radius:9px;background:#EFF6FF;color:#1D4ED8;display:grid;place-items:center;flex-shrink:0">${ic('pin','w-4 h-4')}</span>
           <div style="min-width:0">
@@ -83,12 +83,13 @@ function locsPage(){
           </div>
         </div>
       </td>
-      <td class="px-4 py-3 text-sm">${l.department?esc(l.department):'<span class="text-ink-300">All departments</span>'}</td>
-      <td class="px-4 py-3 text-sm" style="white-space:nowrap">${nC?nC+' checklist'+(nC===1?'':'s'):'<span class="text-ink-300">—</span>'}</td>
-      <td class="px-4 py-3" style="white-space:nowrap;min-width:130px">${_oc.length?`<div style="display:flex;align-items:center;gap:7px"><div style="flex:0 0 54px;height:6px;border-radius:99px;background:var(--c-surface-2);overflow:hidden"><div style="height:100%;width:${_avg}%;border-radius:99px;background:${_blk?'#F59E0B':'#0EA5E9'}"></div></div><span style="font-size:11.5px;font-weight:700;color:var(--c-text-2)">${_oc.length} open · ${_avg}%</span>${_blk?`<span title="${_blk} step(s) waiting on the client or an authority" style="font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:99px;background:#FEF3C7;color:#92400E">${_blk} blocked</span>`:''}</div>`:'<span class="text-ink-300 text-sm">—</span>'}</td>
-      <td class="px-4 py-3 text-sm" style="white-space:nowrap">${(nD||nF)?(nF?nF+' folder'+(nF===1?'':'s')+' · ':'')+nD+' file'+(nD===1?'':'s'):'<span class="text-ink-300">—</span>'}</td>
-      <td class="px-4 py-3">${chip(l.status||'Active')}</td>
-      <td class="px-4 py-3"><div style="display:flex;gap:4px;justify-content:flex-end">
+      <td class="px-4 py-2.5 text-sm">${l.department?esc(l.department):'<span class="text-ink-300">All departments</span>'}</td>
+      <td class="px-4 py-2.5 text-sm" style="white-space:nowrap">${nC?nC+' checklist'+(nC===1?'':'s'):'<span class="text-ink-300">—</span>'}</td>
+      <td class="px-4 py-2.5" style="white-space:nowrap;min-width:130px">${_oc.length?`<div style="display:flex;align-items:center;gap:7px"><div style="flex:0 0 54px;height:6px;border-radius:99px;background:var(--c-surface-2);overflow:hidden"><div style="height:100%;width:${_avg}%;border-radius:99px;background:${_blk?'#F59E0B':'#0EA5E9'}"></div></div><span style="font-size:11.5px;font-weight:700;color:var(--c-text-2)">${_oc.length} open · ${_avg}%</span>${_blk?`<span title="${_blk} step(s) waiting on the client or an authority" style="font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:99px;background:#FEF3C7;color:#92400E">${_blk} blocked</span>`:''}</div>`:'<span class="text-ink-300 text-sm">—</span>'}</td>
+      <td class="px-4 py-2.5 text-sm" style="white-space:nowrap">${(nD||nF)?(nF?nF+' folder'+(nF===1?'':'s')+' · ':'')+nD+' file'+(nD===1?'':'s'):'<span class="text-ink-300">—</span>'}</td>
+      ${canBillView()?`<td class="px-4 py-2.5 text-sm" style="white-space:nowrap">${(()=>{const b=_cliBilling(l.id);if(!b&&!_cliPaid(l.id))return'<span class="text-ink-300">—</span>';const bal=Math.max(0,_cliBalance(l.id));return `<span style="font-weight:700;color:${bal>0?'#B45309':'#0B7A55'}">${esc(fmtMoney(bal,_cliCurrency(l.id)))}</span>`;})()}</td>`:''}
+      <td class="px-4 py-2.5">${chip(l.status||'Active')}</td>
+      <td class="px-4 py-2.5"><div style="display:flex;gap:4px;justify-content:flex-end">
         ${can('locations','edit')?`<button onclick="event.stopPropagation();App.editLoc('${l.id}')" aria-label="Edit client" title="Edit client" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer">${ic('edit','w-4 h-4')}</button>`:''}
         ${can('locations','delete')?`<button onclick="event.stopPropagation();App.delLoc('${l.id}')" aria-label="Delete client" title="Delete client" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer">${ic('trash','w-4 h-4')}</button>`:''}
       </div></td>
@@ -104,6 +105,7 @@ function locsPage(){
           <th class="px-4 py-2.5 font-semibold">Checklists</th>
           <th class="px-4 py-2.5 font-semibold">Case progress</th>
           <th class="px-4 py-2.5 font-semibold">Documents</th>
+          ${canBillView()?'<th class="px-4 py-2.5 font-semibold">Balance due</th>':''}
           <th class="px-4 py-2.5 font-semibold">Status</th>
           <th class="px-4 py-2.5 font-semibold text-right">Actions</th>
         </tr></thead>
@@ -186,8 +188,10 @@ async function _pubStatusRender(token,fresh){
               <span style="flex:1;min-width:140px">• ${esc(s2.label||'')}${dur?` <span style="opacity:.7">(waiting ${esc(dur)})</span>`:''}</span>
               ${s2.can_respond&&!open?`<button onclick="App._pubForm('${esc(clId)}','${esc(String(s2.qid||''))}')" style="font-size:11px;font-weight:800;padding:4px 12px;border-radius:8px;border:none;background:#92400E;color:#fff;cursor:pointer">Respond</button>`:''}
             </div>
+            ${s2.waiting_note?`<div style="font-size:12px;color:#92400E;padding:1px 0 1px 12px">${esc(s2.waiting_note)}</div>`:''}
             ${open?_pubFormHtml(clId,String(s2.qid||''),s2):''}
           </div>`;}).join('')}
+        ${waitingYou.some(s2=>s2.can_respond)?'<div style="font-size:11px;color:#B45309;margin-top:5px">Tap <b>Respond</b> to reply, attach the documents, or simply confirm — it reaches the team instantly.</div>':''}
       </div>`:''}
       <div>${steps.map(s2=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0">
         <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${s2.done?'background:#DCFCE7;color:#0B7A55':'background:#F3F4F6;color:#C8C5BD'}">${s2.done?ic('check','w-3 h-3'):''}</span>
@@ -320,7 +324,7 @@ function _locProgTab(l){
   const lab='font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em';
 
   // ── contact strip ──
-  const contact=`<div class="ui-card" style="padding:12px 16px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+  const contact=`<div class="ui-card" style="padding:10px 14px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
     ${[['Contact',m.contactName],['Email',m.contactEmail],['Phone',m.contactPhone],['Reference',m.reference]].filter(x=>x[1]).map(([k,v])=>`<div><div style="${lab}">${k}</div><div style="font-size:13px;font-weight:600">${esc(v)}</div></div>`).join('')||'<span style="font-size:12px;color:var(--c-text-3)">No contact details yet — add them with Edit above.</span>'}
     ${m.notes?`<div style="flex-basis:100%;font-size:12px;color:var(--c-text-2);font-style:italic">"${esc(m.notes)}"</div>`:''}
   </div>`;
@@ -329,10 +333,10 @@ function _locProgTab(l){
   const bill=_cliBilling(l.id);
   const cur=_cliCurrency(l.id);
   const paid=_cliPaid(l.id),used=_cliUtilized(l.id);
-  const billStrip=(canBill()&&(bill||paid>0||used>0))?(()=>{
+  const billStrip=(canBillView()&&(bill||paid>0||used>0))?(()=>{
     const total=bill?Number(bill.total)||0:0;
     const pctPaid=total>0?Math.min(100,Math.round(paid/total*100)):0;
-    return `<div class="ui-card" style="padding:12px 16px;margin-bottom:12px;cursor:pointer" onclick="App._setLocTab('bill')" title="Open the Billing tab">
+    return `<div class="ui-card" style="padding:10px 14px;margin-bottom:10px;cursor:pointer" onclick="App._setLocTab('bill')" title="Open the Billing tab">
       <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center">
         <div><div style="${lab}">Total value</div><div style="font-size:15px;font-weight:800">${esc(fmtMoney(total,cur))}</div></div>
         <div><div style="${lab}">Paid</div><div style="font-size:15px;font-weight:800;color:#0B7A55">${esc(fmtMoney(paid,cur))}</div></div>
@@ -346,7 +350,7 @@ function _locProgTab(l){
 
   // ── what the client sent back through the status link ──
   const replies=_repliesFor(l.id);
-  const repliesCard=replies.length?`<div class="ui-card" style="border-left:4px solid #0EA5E9;padding:12px 16px;margin-bottom:12px">
+  const repliesCard=replies.length?`<div class="ui-card" style="border-left:3px solid #0EA5E9;padding:10px 14px;margin-bottom:10px">
     <div style="font-size:12.5px;font-weight:800;margin-bottom:6px">${ic('send','w-4 h-4 inline')} From the client — ${replies.length}</div>
     ${replies.slice(0,6).map(r=>{
       const q=(DB.questions||[]).find(x=>x.id===r.questionId);const c2=clById(r.checklistId);
@@ -368,7 +372,7 @@ function _locProgTab(l){
   const _sp=_sharePrefsOf(l.id);
   const _spTog=(key,label,on,hint)=>`<label title="${esc(hint)}" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:${on?'var(--c-text)':'var(--c-text-3)'};cursor:pointer">
       <button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="App._sharePref('${l.id}','${key}')"><span></span></button>${label}</label>`;
-  const share=canEdit?`<div class="ui-card" style="padding:12px 16px;margin-bottom:12px">
+  const share=canEdit?`<div class="ui-card" style="padding:10px 14px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <div style="flex:1;min-width:200px">
         <div style="font-size:13px;font-weight:800">${ic('link','w-4 h-4 inline')} Client status link</div>
@@ -407,8 +411,8 @@ function _locProgTab(l){
       const ng=wc?lastNudge(q.id,c.id):null;
       const escd=done&&_qrEscalates(c,q,a);
       const rep=!done?_replyForQ(c.id,cd,q.id):null;          // the client's own response, via the link
-      const qc=canBill()?_qCostOf(c.id,cd,q.id):null;          // per-step utilized cost (Billing eyes only)
-      return `<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--c-border)">
+      const qc=canBillView()?_qCostOf(c.id,cd,q.id):null;      // per-step utilized cost (Billing eyes only)
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--c-border)">
         <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${escd?'background:#FEE2E2;color:#B91C1C':done?'background:#DCFCE7;color:#0B7A55':'background:var(--c-surface-2);color:var(--c-text-3)'}">${escd?ic('alert','w-3 h-3'):done?ic('check','w-3 h-3'):(q===next?ic('chevR','w-3 h-3'):'')}</span>
         <span style="flex:1;min-width:0;font-size:13px;font-weight:${q===next?'800':'600'};color:${done?'var(--c-text-2)':'var(--c-text)'}">${esc(q.text)}${q===next&&!cs?' <span style="font-size:9.5px;font-weight:800;color:#4338CA;background:#EEF2FF;padding:1px 7px;border-radius:99px;vertical-align:middle">NEXT UP</span>':''}</span>
         ${qc&&qc.amount>0?`<span title="Utilized on this step" style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-2);flex-shrink:0">${esc(fmtMoney(qc.amount,_cliCurrency(l.id)))}</span>`:''}
@@ -419,8 +423,8 @@ function _locProgTab(l){
         ${wc&&m.contactEmail&&canEdit?`<button onclick="App._nudgeClient('${l.id}','${c.id}','${q.id}')" title="${ng?'Last nudged '+new Date(ng.sentAt).toLocaleString('en-GB',{day:'numeric',month:'short'}):'Email the client a reminder about this'}" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px;flex-shrink:0">${ic('mail','w-3 h-3')} Nudge${ng?'d '+new Date(ng.sentAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</button>`:''}
       </div>`;
     }).join('');
-    return `<div class="ui-card" style="margin-bottom:10px;overflow:hidden">
-      <div style="padding:13px 16px 11px">
+    return `<div class="ui-card" style="margin-bottom:8px;overflow:hidden">
+      <div style="padding:11px 14px 9px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <span style="font-size:14.5px;font-weight:800">${esc(c.name)}</span>
           ${cs?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#DCFCE7;color:#0B7A55">COMPLETED ${cs.submittedAt?new Date(cs.submittedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</span>`
@@ -433,10 +437,10 @@ function _locProgTab(l){
           <span>opened ${fmtS(caseDate(c))}</span>
           ${dl?`<span style="${over&&!cs?'color:#B91C1C;font-weight:700':''}">due ${esc(dl)}</span>`:''}
           ${(c.assignees||[]).length?`<span>${(c.assignees||[]).length} on it</span>`:''}
-          ${canBill()&&_runUtilized(c.id,cd)>0?`<span title="Σ per-step costs on this case">utilized <b style="color:var(--c-text-2)">${esc(fmtMoney(_runUtilized(c.id,cd),_cliCurrency(l.id)))}</b></span>`:''}
+          ${canBillView()&&_runUtilized(c.id,cd)>0?`<span title="Σ per-step costs on this case">utilized <b style="color:var(--c-text-2)">${esc(fmtMoney(_runUtilized(c.id,cd),_cliCurrency(l.id)))}</b></span>`:''}
         </div>
       </div>
-      <div style="padding:2px 16px 12px">${rows}</div>
+      <div style="padding:2px 14px 10px">${rows}</div>
     </div>`;
   };
 
@@ -447,15 +451,19 @@ function _locProgTab(l){
     const st=_qStatusOf(c.id,cd,q.id);if(!st||st.status==='in_progress')return;
     blocked.push({c,q,st,days:_qsDays(st)});});});
   blocked.sort((a,b)=>b.days-a.days);
-  const blockedCard=blocked.length?`<div class="ui-card" style="border-left:4px solid #F59E0B;padding:12px 16px;margin-bottom:12px">
+  const blockedCard=blocked.length?`<div class="ui-card" style="border-left:3px solid #F59E0B;padding:10px 14px;margin-bottom:10px">
     <div style="font-size:12.5px;font-weight:800;margin-bottom:6px">${ic('clock','w-4 h-4 inline')} Waiting on someone — ${blocked.length}</div>
-    ${blocked.slice(0,6).map(b=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0">
-      <span style="flex:1;min-width:0">${esc(b.q.text)} <span style="color:var(--c-text-3)">· ${esc(b.c.name)}</span></span>
-      ${_qsBadge(b.c.id,caseDate(b.c),b.q.id)}
-    </div>`).join('')}
+    ${blocked.slice(0,6).map(b=>{const wn=b.st.status==='waiting_client'?_waitNoteOf(b.c.id,caseDate(b.c),b.q.id):null;
+      return `<div style="padding:3px 0">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
+        <span style="flex:1;min-width:0">${esc(b.q.text)} <span style="color:var(--c-text-3)">· ${esc(b.c.name)}</span></span>
+        ${_qsBadge(b.c.id,caseDate(b.c),b.q.id)}
+      </div>
+      ${wn&&wn.note?`<div style="font-size:11.5px;color:#92400E;padding-left:2px">↳ waiting for: ${esc(wn.note)}</div>`:''}
+    </div>`;}).join('')}
   </div>`:'';
 
-  const recurringCard=recurring.length?`<div class="ui-card" style="padding:12px 16px;margin-bottom:12px">
+  const recurringCard=recurring.length?`<div class="ui-card" style="padding:10px 14px;margin-bottom:10px">
     <div style="${lab};margin-bottom:6px">Recurring work for this client</div>
     ${recurring.map(c=>{const on=clOn(c,todayISO());const sub=on?runSub(c.id,todayISO()):null;
       return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0">
@@ -466,7 +474,7 @@ function _locProgTab(l){
 
   // ── open tickets touching this client (through its checklists) ──
   const cliTickets=(DB.tickets||[]).filter(t=>clientIdsOfTicket(t).includes(l.id)&&t.status!=='Resolved'&&t.status!=='Closed');
-  const ticketsCard=`<div class="ui-card" style="padding:12px 16px;margin-bottom:12px">
+  const ticketsCard=`<div class="ui-card" style="padding:10px 14px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:${cliTickets.length?'6px':'0'}">
       <div style="font-size:12.5px;font-weight:800">${ic('flag','w-4 h-4 inline')} Open tickets — ${cliTickets.length}</div>
       ${can('tickets','create')?`<button onclick="App._newTicketFor('${l.id}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="margin-left:auto">${ic('plus','w-3 h-3')} Raise ticket</button>`:''}
@@ -493,7 +501,8 @@ function _locProgTab(l){
    every invoice issued, and the running utilized/balance picture. Permission-gated
    by Clients → Billing & invoices; the tm_ billing tables enforce the same server-side. */
 function _locBillTab(l){
-  if(!(can('locations','billing')||isAdmin()))return '';
+  if(!(can('locations','billing')||can('locations','billingView')||isAdmin()))return '';
+  const manage=canBill();
   const lab='font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em';
   const b=_cliBilling(l.id);
   const cur=_cliCurrency(l.id);
@@ -503,8 +512,8 @@ function _locBillTab(l){
   const used=_cliUtilized(l.id);
   const pays=(DB.tmPayments||[]).filter(p=>p.clientId===l.id).sort((a,b2)=>String(b2.paidOn||'').localeCompare(String(a.paidOn||'')));
   const invs=(DB.tmInvoices||[]).filter(v=>v.clientId===l.id).sort((a,b2)=>String(b2.createdAt||'').localeCompare(String(a.createdAt||'')));
-  const stat=(label,val,color)=>`<div class="ui-card" style="padding:12px 16px;flex:1;min-width:150px">
-    <div style="${lab}">${label}</div><div style="font-size:19px;font-weight:800;margin-top:2px;color:${color||'var(--c-text)'}">${esc(val)}</div></div>`;
+  const stat=(label,val,color)=>`<div class="ui-card" style="padding:10px 14px;flex:1;min-width:145px">
+    <div style="${lab}">${label}</div><div style="font-size:17px;font-weight:800;margin-top:2px;color:${color||'var(--c-text)'}">${esc(val)}</div></div>`;
 
   const summary=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
     ${stat('Total value',fmtMoney(total,cur))}
@@ -513,19 +522,19 @@ function _locBillTab(l){
     ${stat('Utilized',fmtMoney(used,cur),total>0&&used>total?'#B91C1C':'var(--c-text-2)')}
   </div>`;
 
-  const actions=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+  const actions=manage?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
     ${btnP('Record payment',`App._payAdd('${l.id}')`,'plus')}
     ${btn('Generate invoice',`App._invGen('${l.id}','')`,{variant:'ghost',icon:'receipt'})}
     ${btn('Invoice template','App._invSettings()',{variant:'ghost',icon:'cog'})}
     <span style="margin-left:auto;font-size:11.5px;color:var(--c-text-3);align-self:center">Total &amp; currency are set on the client — Edit above.</span>
-  </div>`;
+  </div>`:'<div style="font-size:11.5px;color:var(--c-text-3);margin-bottom:12px">View-only — recording payments and issuing invoices needs Clients → Billing — manage.</div>';
 
   const payCard=`<div class="ui-card" style="margin-bottom:12px;overflow:hidden">
-    <div style="padding:11px 16px;border-bottom:1px solid var(--c-border);font-size:12.5px;font-weight:800">${ic('check','w-4 h-4 inline')} Payments — ${pays.length}</div>
+    <div style="padding:9px 14px;border-bottom:1px solid var(--c-border);font-size:12.5px;font-weight:800">${ic('check','w-4 h-4 inline')} Payments — ${pays.length}</div>
     ${pays.length?pays.map(p=>{
       const by=uById(p.recordedBy);
       const inv=invs.find(v=>v.paymentId===p.id&&v.status!=='Void');
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--c-border);font-size:12.5px;flex-wrap:wrap">
+      return `<div style="display:flex;align-items:center;gap:9px;padding:7px 14px;border-bottom:1px solid var(--c-border);font-size:12.5px;flex-wrap:wrap">
         <span style="font-weight:800;min-width:110px">${esc(fmtMoney(p.amount,cur))}</span>
         <span style="color:var(--c-text-3)">${fmtS(String(p.paidOn||''))}</span>
         ${p.method?`<span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-2)">${esc(p.method)}</span>`:''}
@@ -534,16 +543,16 @@ function _locBillTab(l){
         <span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">
           ${by?`<span style="font-size:11px;color:var(--c-text-3)">${esc(fullName(by))}</span>`:''}
           ${inv?`<button onclick="App._invView('${esc(inv.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">${esc(inv.number)}</button>`
-              :`<button onclick="App._invGen('${l.id}','${esc(p.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">${ic('receipt','w-3 h-3')} Invoice</button>`}
-          <button onclick="App._payDel('${esc(p.id)}')" aria-label="Delete payment" title="Delete payment" style="width:26px;height:26px;display:grid;place-items:center;border-radius:7px;color:var(--c-danger-ink);background:transparent;border:none;cursor:pointer">${ic('trash','w-3.5 h-3.5')}</button>
+              :manage?`<button onclick="App._invGen('${l.id}','${esc(p.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">${ic('receipt','w-3 h-3')} Invoice</button>`:''}
+          ${manage?`<button onclick="App._payDel('${esc(p.id)}')" aria-label="Delete payment" title="Delete payment" style="width:26px;height:26px;display:grid;place-items:center;border-radius:7px;color:var(--c-danger-ink);background:transparent;border:none;cursor:pointer">${ic('trash','w-3.5 h-3.5')}</button>`:''}
         </span>
       </div>`;}).join('')
     :'<div style="padding:16px;font-size:12.5px;color:var(--c-text-3)">No payments recorded yet. “Record payment” keeps the running Paid / Balance picture right and can raise the invoice in the same step.</div>'}
   </div>`;
 
   const invCard=`<div class="ui-card" style="overflow:hidden">
-    <div style="padding:11px 16px;border-bottom:1px solid var(--c-border);font-size:12.5px;font-weight:800">${ic('receipt','w-4 h-4 inline')} Invoices — ${invs.length}</div>
-    ${invs.length?invs.map(v=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--c-border);font-size:12.5px;flex-wrap:wrap">
+    <div style="padding:9px 14px;border-bottom:1px solid var(--c-border);font-size:12.5px;font-weight:800">${ic('receipt','w-4 h-4 inline')} Invoices — ${invs.length}</div>
+    ${invs.length?invs.map(v=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 14px;border-bottom:1px solid var(--c-border);font-size:12.5px;flex-wrap:wrap">
         <span style="font-weight:800">${esc(v.number)}</span>
         <span style="font-weight:700">${esc(fmtMoney(v.total,v.currency))}</span>
         ${v.taxRate?`<span style="color:var(--c-text-3)">incl. ${esc((v.snapshot&&v.snapshot.taxLabel)||'VAT')} ${v.taxRate}%</span>`:''}
@@ -551,7 +560,7 @@ function _locBillTab(l){
         ${v.status==='Void'?'<span style="font-size:10px;font-weight:800;padding:1px 8px;border-radius:99px;background:#FEE2E2;color:#B91C1C">VOID</span>':''}
         <span style="margin-left:auto;display:inline-flex;gap:6px">
           <button onclick="App._invView('${esc(v.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">${ic('eye','w-3 h-3')} View / print</button>
-          ${v.status!=='Void'?`<button onclick="App._invVoid('${esc(v.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px;color:var(--c-danger-ink)">Void</button>`:''}
+          ${v.status!=='Void'&&manage?`<button onclick="App._invVoid('${esc(v.id)}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px;color:var(--c-danger-ink)">Void</button>`:''}
         </span>
       </div>`).join('')
     :'<div style="padding:16px;font-size:12.5px;color:var(--c-text-3)">No invoices yet. Record a payment (an invoice can be raised in the same step), or “Generate invoice” for any amount.</div>'}

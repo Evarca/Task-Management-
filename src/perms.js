@@ -68,7 +68,7 @@ const PERM_AREAS=[
   {key:'reports',label:'Dashboard — HRM Analytics',desc:'HR analytics dashboard & CSV exports',actions:['view','download'],scoped:true,group:'Dashboards & Inbox'},
   {key:'okr',label:'OKRs',desc:'Hierarchical objectives (L0 → L1 → L2) with annual → quarterly splits. “Sees” decides WHOSE objectives they can view — owners always see their own (they have to update them); sub-objectives of anything visible are included',actions:['view','create','edit','checkin','manage','delete'],scoped:true,group:'Dashboards & Inbox'},
   {key:'announcements',label:'Announcements',desc:'Company-wide messages',actions:['view','create','delete'],scoped:false,group:'Work & Content'},
-  {key:'locations',label:'Clients',desc:'The client list, and the folders and documents held against each one',actions:['view','create','edit','delete','manage','billing'],scoped:false,group:'Administration'},
+  {key:'locations',label:'Clients',desc:'The client list, and the folders and documents held against each one',actions:['view','create','edit','delete','manage','billing','billingView'],scoped:false,group:'Administration'},
   {key:'departments',label:'Departments',desc:'Departments & sub-departments — create, edit and delete are separate toggles',actions:['view','create','edit','delete'],scoped:false,group:'Administration'},
   {key:'approvals',label:'Inbox — Approvals',desc:'The unified approvals page (what they can act on is still per-area)',actions:['view'],scoped:false,group:'Dashboards & Inbox'},
   {key:'scheduling',label:'Shifts / Roster',desc:'The weekly shift roster — build, edit, publish and delete are separate toggles',actions:['view','create','edit','publish','delete'],scoped:true,group:'Time & Leave'},
@@ -84,7 +84,7 @@ const PERM_AREAS=[
   {key:'accessControl',label:'Access Control',desc:'The role-profile system itself',actions:['view','manage'],scoped:false,group:'Administration'},
 ];
 // Plain-language labels used by the Access Control editor + live summary.
-const PERM_ACTION_LABEL={view:'View',create:'Create',edit:'Edit',delete:'Delete',deactivate:'Deactivate',approve:'Approve',download:'Download / Export',manage:'Manage',billing:'Billing & invoices',manageSettings:'Manage settings',assign:'Assign',assignRole:'Assign role profile',assignManager:'Assign manager',grant:'Grant / Remove',submit:'Submit',upload:'Upload',manageGeofence:'Manage geofence',issue:'Issue',verify:'Verify',run:'Run',finalize:'Finalize',rollback:'Roll back',checkin:'Check-in / Update',changeStatus:'Change status',resolve:'Resolve',duplicate:'Duplicate',resetPassword:'Reset password',manageAssets:'Assets (assign / return)',start:'Start / Assign flow',progress:'Update steps',publish:'Publish',close:'Open / Close'};
+const PERM_ACTION_LABEL={view:'View',create:'Create',edit:'Edit',delete:'Delete',deactivate:'Deactivate',approve:'Approve',download:'Download / Export',manage:'Manage',billing:'Billing — manage (payments, invoices, totals)',billingView:'Billing — view only',manageSettings:'Manage settings',assign:'Assign',assignRole:'Assign role profile',assignManager:'Assign manager',grant:'Grant / Remove',submit:'Submit',upload:'Upload',manageGeofence:'Manage geofence',issue:'Issue',verify:'Verify',run:'Run',finalize:'Finalize',rollback:'Roll back',checkin:'Check-in / Update',changeStatus:'Change status',resolve:'Resolve',duplicate:'Duplicate',resetPassword:'Reset password',manageAssets:'Assets (assign / return)',start:'Start / Assign flow',progress:'Update steps',publish:'Publish',close:'Open / Close'};
 const SCOPE_ORDER=['none','self','team','department','location','everyone'];
 const SCOPE_LABEL={none:'None',self:'Only their own',team:'Their team',department:'Their department',location:'Their office',everyone:'Everyone'};
 /* People are no longer assigned to an office, so the 'location' scope has nothing left to
@@ -214,7 +214,7 @@ function _seedRoleProfiles(){
       reviews:A('self','view','submit'),
     }},
   };
-  const V='11'; // v11: locations.billing — client billing & invoices get their own toggle; superadmin/admin re-seed WITH it, every other role stays off until it is granted // v10 micro permissions // v9 OKR port // v8 // v7 // v6
+  const V='12'; // v12: billing split into VIEW (see totals/paid/balance/utilized) and MANAGE (record payments, invoices, template); superadmin/admin re-seed with both // v11 locations.billing // v10 micro permissions // v9 OKR port // v8
   Object.values(presets).forEach(p=>{
     const cur=DB.roleProfiles[p.id];
     if(!cur||(cur.builtin&&cur._v!==V)){p._v=V;DB.roleProfiles[p.id]=p;} // upgrade built-ins once; never touch custom roles

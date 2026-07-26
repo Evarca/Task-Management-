@@ -212,11 +212,12 @@ function _lazyForRoute(r){
   if(r==='tickets')_lazyLoad('tickets');
   else if(r==='approvals')_lazyLoad('approvals');
   else if(r==='notifications'){_lazyLoad('notifications');_lazyLoad('feedback');}
-  else if(r==='mychecklists')_lazyLoadDate('mychecklists');
+  else if(r==='mychecklists'){_lazyLoadDate('mychecklists');_repliesLoad().then(()=>rr()).catch(()=>{});_qcLoad().then(()=>rr()).catch(()=>{});}
   else if(r==='teamview')_lazyLoadDate('teamview');
   else if(r==='allcl')_lazyLoadDate('allcl');
   else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoadDate('mychecklists');_lazyCold('subs30');}
   // Cold windows (older than the boot week) fetch on first open of the tab that needs them.
+  else if(r==='locations'){_qsLoad().then(()=>rr()).catch(()=>{});_qcLoad().then(()=>rr()).catch(()=>{});_repliesLoad().then(()=>rr()).catch(()=>{});}
   else if(r==='audit')_lazyCold('audit');
   else if(r==='analytics')_lazyCold('subs30');
 }
@@ -419,8 +420,7 @@ async function loadFromSB(){
   // ── Location folders + documents (new tm_ tables). ──
   _docsLoad().then(()=>{saveDB();rr();}).catch(()=>{});
   _clientMetaLoad().then(()=>{saveDB();rr();}).catch(()=>{});
-  // ── Round-5 tables: templates, client share links, nudge log (all small; RLS scopes them). ──
-  _tplLoad().then(()=>{saveDB();rr();}).catch(()=>{});
+  // ── Round-5 tables: client share links + nudge log (templates were retired in round 9). ──
   _shareLoad().then(()=>{rr();}).catch(()=>{});
   _nudgeLoad().then(()=>{rr();}).catch(()=>{});
   // -- Round-8 tables: billing, payments, invoices, per-question costs, link prefs, client

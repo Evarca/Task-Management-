@@ -27,6 +27,8 @@ const NOTIF_EVENTS=[
   {key:'ticket_assigned',      group:'Tickets & feedback',  label:'Ticket assigned',      who:'The person it goes to'},
   {key:'ticket_resolved',      group:'Tickets & feedback',  label:'Ticket resolved',      who:'Whoever raised it'},
   {key:'feedback_received',    group:'Tickets & feedback',  label:'Feedback received',    who:'The person it is about'},
+  {key:'payment_recorded',     group:'Billing',             label:'Payment recorded',     who:'Everyone who can manage billing'},
+  {key:'invoice_generated',    group:'Billing',             label:'Invoice generated',    who:'Everyone who can manage billing'},
 ];
 const NOTIF_GROUPS=[...new Set(NOTIF_EVENTS.map(e=>e.group))];
 const _evByKey=k=>NOTIF_EVENTS.find(e=>e.key===k)||null;
@@ -37,6 +39,7 @@ const _EVENT_KIND={
   submission_approved:'submission',submission_rejected:'submission',
   escalation:'ticket',ticket_assigned:'ticket',ticket_resolved:'ticket',
   feedback_received:'feedback',
+  payment_recorded:'general',invoice_generated:'general',
 };
 
 /* ── channel switches ── */

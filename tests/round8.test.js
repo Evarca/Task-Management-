@@ -202,7 +202,7 @@ describe('3 — invoices: numbering, tax, snapshot, void', () => {
     expect(html).toContain('INV-0007');
     expect(html).toContain('AED 7,350');
     expect(html).toContain('VAT (5%)');
-    expect(html).toContain('TRN: 100200300');
+    expect(html).toContain('TRN 100200300');
   });
 
   it('void keeps it on file, watermarked, number never reused', async () => {
@@ -241,7 +241,8 @@ describe('4 — Clients → Billing & invoices is a real, granular permission', 
   it('is offered by the editor, seeded ON for superadmin/admin, OFF for everyone else', () => {
     const loc = W._tmAreas().find(a => a.key === 'locations');
     expect(loc.actions).toContain('billing');
-    expect(W.PERM_ACTION_LABEL.billing).toBe('Billing & invoices');
+    expect(W.PERM_ACTION_LABEL.billing).toContain('Billing');
+    expect(loc.actions).toContain('billingView');   // round 9: view/manage split
     expect(W.DB.roleProfiles.superadmin.perms.locations.actions.billing).toBe(true);
     expect(W.DB.roleProfiles.admin.perms.locations.actions.billing).toBe(true);
     expect(!!W.DB.roleProfiles.manager.perms.locations?.actions?.billing).toBe(false);

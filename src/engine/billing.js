@@ -26,14 +26,15 @@
    nothing here is added to the debounced _sync() whole-table batch.
    ════════════════════════════════════════════════════════════════════════════ */
 
-const canBill=()=>can('locations','billing')||isAdmin();
+const canBill=()=>can('locations','billing')||isAdmin();          // manage: record payments, invoices, totals, template
+const canBillView=()=>can('locations','billingView')||canBill();   // view: see totals / paid / balance / utilized
 
 /* ── mappers ── */
 function _mPay(rows){return(rows||[]).map(p=>({id:p.id,clientId:p.client_id,amount:Number(p.amount)||0,paidOn:p.paid_on,method:p.method||'',reference:p.reference||'',notes:p.notes||'',recordedBy:p.recorded_by||null,createdAt:p.created_at}));}
 function _payRow(p){return{id:p.id,client_id:p.clientId,amount:p.amount,paid_on:p.paidOn,method:p.method||'',reference:p.reference||'',notes:p.notes||'',recorded_by:p.recordedBy||null,created_at:p.createdAt||new Date().toISOString()};}
 function _mInv(rows){return(rows||[]).map(v=>({id:v.id,clientId:v.client_id,number:v.number,paymentId:v.payment_id||null,amount:Number(v.amount)||0,taxRate:Number(v.tax_rate)||0,taxAmount:Number(v.tax_amount)||0,total:Number(v.total)||0,currency:v.currency||'AED',issuedOn:v.issued_on,notes:v.notes||'',snapshot:v.snapshot||{},status:v.status||'Issued',createdBy:v.created_by||null,createdAt:v.created_at}));}
 function _invRow(v){return{id:v.id,client_id:v.clientId,number:v.number,payment_id:v.paymentId||null,amount:v.amount,tax_rate:v.taxRate||0,tax_amount:v.taxAmount||0,total:v.total,currency:v.currency||'AED',issued_on:v.issuedOn,notes:v.notes||'',snapshot:v.snapshot||{},status:v.status||'Issued',created_by:v.createdBy||null,created_at:v.createdAt||new Date().toISOString()};}
-function _mInvSettings(r){if(!r)return null;return{companyName:r.company_name||'',address:r.address||'',phone:r.phone||'',email:r.email||'',trn:r.trn||'',logo:r.logo||'',footerText:r.footer_text||'',terms:r.terms||'',currency:r.currency||'AED',taxLabel:r.tax_label||'VAT',taxRate:Number(r.tax_rate)||0,numberPrefix:r.number_prefix||'INV-'};}
+function _mInvSettings(r){if(!r)return null;return{companyName:r.company_name||'',address:r.address||'',phone:r.phone||'',email:r.email||'',trn:r.trn||'',logo:r.logo||'',footerText:r.footer_text||'',terms:r.terms||'',currency:r.currency||'AED',taxLabel:r.tax_label||'VAT',taxRate:Number(r.tax_rate)||0,numberPrefix:r.number_prefix||'INV-',nextNumber:Number(r.next_number)||1};}
 
 /* ── money formatting: "AED 7,000" (currency is free text — whatever was configured) ── */
 function fmtMoney(n,cur){
@@ -131,7 +132,9 @@ App._payAddGo=(locId)=>{
   const wantInv=!!$('#pay-inv')?.checked;
   DB.tmPayments=DB.tmPayments||[];DB.tmPayments.unshift(p);
   sb.from('tm_payments').insert(_payRow(p)).then(({error})=>{if(error)_syncErr('payment')(error);}).catch(_syncErr('payment'));
-  log(fullName(me()),'Recorded payment',fmtMoney(amt,_cliCurrency(locId))+' · '+((locById(locId)||{}).name||''));
+  const _cliNm=(locById(locId)||{}).name||'a client';
+  log(fullName(me()),'Recorded payment',fmtMoney(amt,_cliCurrency(locId))+' · '+_cliNm);
+  _notifyBillingFolks('payment_recorded','💰 Payment recorded: '+fmtMoney(amt,_cliCurrency(locId))+' from '+_cliNm+' — by '+fullName(me()),{client_name:_cliNm,amount:fmtMoney(amt,_cliCurrency(locId))});
   saveDB();closeModal();toast('Payment recorded');rr();
   if(wantInv)App._invGen(locId,p.id);
 };
@@ -259,7 +262,12 @@ App._invGen=async(locId,payId)=>{
         ${fld(esc(s.taxLabel||'VAT')+' rate %','iv-tax',(s.taxRate??0),'number','0 for none')}
         ${fld('Issue date','iv-date',todayISO(),'date','')}
       </div>
-      <div style="font-size:11.5px;color:var(--c-text-3)">Numbered automatically (${esc((s.numberPrefix||'INV-'))}…). The current company template is stamped onto this invoice — edit it under “Invoice template”.</div>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--c-surface-2);border-radius:9px;padding:8px 11px">
+        <span style="font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Invoice no.</span>
+        <span style="font-size:13px;font-weight:800">${esc((s.numberPrefix||'INV-')+String(s.nextNumber||1).padStart(4,'0'))}</span>
+        <span style="font-size:11px;color:var(--c-text-3)">assigned automatically</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--c-text-3)">The current company template is stamped onto this invoice — edit it under “Invoice template”.</div>
     </div>`,
     footer:btnG('Cancel','App.closeModal()')+btnP('Create invoice',`App._invGenGo('${esc(locId)}','${esc(payId||'')}')`)});
 };
@@ -276,6 +284,7 @@ App._invGenGo=async(locId,payId)=>{
   try{const r=await sb.rpc('tm_next_invoice_no');if(r.error)throw r.error;number=r.data;}catch(e){
     toast('Could not allocate an invoice number — check your permission and connection','err');return;
   }
+  if(DB.tmInvoiceSettings)DB.tmInvoiceSettings.nextNumber=(Number(DB.tmInvoiceSettings.nextNumber)||1)+1; // keep the preview honest for the next one
   const taxAmount=Math.round(amt*taxRate)/100;
   const v={id:uid('inv'),clientId:locId,number,paymentId:payId||null,amount:amt,taxRate,taxAmount,
     total:amt+taxAmount,currency:_cliCurrency(locId),issuedOn,notes,
@@ -286,6 +295,7 @@ App._invGenGo=async(locId,payId)=>{
   DB.tmInvoices=DB.tmInvoices||[];DB.tmInvoices.unshift(v);
   sb.from('tm_invoices').insert(_invRow(v)).then(({error})=>{if(error)_syncErr('invoice')(error);}).catch(_syncErr('invoice'));
   log(fullName(me()),'Generated invoice',number+' · '+fmtMoney(v.total,v.currency)+' · '+(l.name||''));
+  _notifyBillingFolks('invoice_generated','🧾 Invoice '+number+' ('+fmtMoney(v.total,v.currency)+') — '+(l.name||'a client')+' — by '+fullName(me()),{client_name:l.name||'',invoice_no:number,amount:fmtMoney(v.total,v.currency)});
   saveDB();closeModal();toast('Invoice '+number+' created');rr();
   App._invView(v.id);
 };
@@ -305,67 +315,162 @@ App._invVoidGo=(invId)=>{
   saveDB();closeModal();toast('Invoice voided','warn');rr();
 };
 
-/* ── the printable invoice (standalone document — print → save as PDF) ── */
+/* ── the printable invoice (standalone document — print → save as PDF) ──
+   One clean A4 page: company block + logo top-left, big INVOICE + number top-right,
+   a Billed-to / Details two-column band, one item line with a right-aligned totals
+   stack, and quiet terms + footer at the bottom. Everything renders from the SNAPSHOT
+   taken at issue time, so this document never changes after the fact. */
 function _invHtml(v){
   const sn=v.snapshot||{};const cl=sn.client||{};
   const money=n=>fmtMoney(n,v.currency);
+  const pay=v.paymentId?(DB.tmPayments||[]).find(p=>p.id===v.paymentId):null;
+  const issued=fmtS(String(v.issuedOn||''));
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(v.number)}</title>
   <style>
-    body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#15171C;margin:0;padding:40px;font-size:13px}
-    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:34px}
-    .h1{font-size:26px;font-weight:800;letter-spacing:.02em}
-    table{width:100%;border-collapse:collapse;margin:18px 0}
-    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6B7280;border-bottom:2px solid #15171C;padding:8px 10px}
-    td{padding:10px;border-bottom:1px solid #E5E7EB}
-    .r{text-align:right}.muted{color:#6B7280}.tot td{border-bottom:none;font-weight:800;font-size:15px;border-top:2px solid #15171C}
-    .void{position:fixed;top:38%;left:0;right:0;text-align:center;font-size:110px;font-weight:900;color:rgba(220,38,38,.14);transform:rotate(-18deg);letter-spacing:.1em}
-    .footer{margin-top:38px;padding-top:14px;border-top:1px solid #E5E7EB;font-size:12px;color:#6B7280;white-space:pre-wrap}
+    *{box-sizing:border-box}
+    body{font-family:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#15171C;margin:0;background:#F2F1EE}
+    .page{max-width:790px;margin:26px auto;background:#fff;border-top:4px solid #15171C;padding:52px 56px 44px;min-height:960px;position:relative;box-shadow:0 1px 12px rgba(15,15,15,.07)}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+    .co{font-size:16px;font-weight:800;letter-spacing:.01em}
+    .muted{color:#7A7F87;font-size:12px;line-height:1.55}
+    .h1{font-size:30px;font-weight:300;letter-spacing:.28em;color:#15171C;text-align:right}
+    .no{font-size:14px;font-weight:800;text-align:right;margin-top:2px}
+    .pill{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.08em;padding:3px 11px;border-radius:99px;margin-top:8px}
+    .band{display:flex;justify-content:space-between;gap:24px;margin:40px 0 8px;padding:18px 20px;background:#FAFAF8;border-radius:12px}
+    .lbl{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#9CA3AF;margin-bottom:6px}
+    .who{font-size:15px;font-weight:800}
+    .kv{font-size:12.5px;line-height:1.7}
+    .kv b{display:inline-block;min-width:86px;color:#7A7F87;font-weight:600}
+    table{width:100%;border-collapse:collapse;margin-top:26px}
+    th{text-align:left;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#9CA3AF;border-bottom:1.5px solid #15171C;padding:0 2px 9px}
+    td{padding:14px 2px;border-bottom:1px solid #EEEDE9;font-size:13.5px}
+    .r{text-align:right}
+    .tots{margin-left:auto;width:280px;margin-top:6px}
+    .tots .row{display:flex;justify-content:space-between;padding:7px 2px;font-size:13px;color:#4B5563}
+    .tots .grand{border-top:2px solid #15171C;margin-top:6px;padding-top:11px;font-size:16.5px;font-weight:800;color:#15171C}
+    .paidline{margin-top:14px;text-align:right;font-size:12px;font-weight:700;color:#0B7A55}
+    .foot{position:absolute;left:56px;right:56px;bottom:40px}
+    .terms{font-size:11.5px;color:#7A7F87;line-height:1.6;white-space:pre-wrap;border-top:1px solid #EEEDE9;padding-top:14px}
+    .thanks{font-size:12px;color:#4B5563;margin-top:10px;white-space:pre-wrap}
+    .void{position:absolute;top:36%;left:0;right:0;text-align:center;font-size:120px;font-weight:900;color:rgba(220,38,38,.10);transform:rotate(-18deg);letter-spacing:.12em;pointer-events:none}
     .noprint{position:fixed;top:14px;right:14px}
-    @media print{.noprint{display:none}}
+    @media print{.noprint{display:none}body{background:#fff}.page{margin:0;box-shadow:none;max-width:none;min-height:auto}}
   </style></head><body>
-  ${v.status==='Void'?'<div class="void">VOID</div>':''}
-  <div class="noprint"><button onclick="window.print()" style="padding:9px 18px;border-radius:9px;border:none;background:#15171C;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Print / Save PDF</button></div>
-  <div class="top">
-    <div>
-      ${sn.logo?`<img src="${esc(sn.logo)}" alt="" style="max-height:56px;margin-bottom:10px"/><br/>`:''}
-      <div style="font-size:17px;font-weight:800">${esc(sn.companyName||'')}</div>
-      <div class="muted" style="white-space:pre-wrap">${esc(sn.address||'')}</div>
-      <div class="muted">${esc([sn.phone,sn.email].filter(Boolean).join(' · '))}</div>
-      ${sn.trn?`<div class="muted">TRN: ${esc(sn.trn)}</div>`:''}
+  <div class="noprint"><button onclick="window.print()" style="padding:9px 18px;border-radius:9px;border:none;background:#15171C;color:#fff;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18)">Print / Save PDF</button></div>
+  <div class="page">
+    ${v.status==='Void'?'<div class="void">VOID</div>':''}
+    <div class="top">
+      <div>
+        ${sn.logo?`<img src="${esc(sn.logo)}" alt="" style="max-height:52px;max-width:210px;object-fit:contain;margin-bottom:12px;display:block"/>`:''}
+        <div class="co">${esc(sn.companyName||'')}</div>
+        <div class="muted" style="margin-top:4px;white-space:pre-wrap">${esc(sn.address||'')}</div>
+        <div class="muted">${esc([sn.phone,sn.email].filter(Boolean).join('  ·  '))}</div>
+        ${sn.trn?`<div class="muted">TRN ${esc(sn.trn)}</div>`:''}
+      </div>
+      <div>
+        <div class="h1">INVOICE</div>
+        <div class="no">${esc(v.number)}</div>
+        <div style="text-align:right">
+          ${v.status==='Void'?'<span class="pill" style="background:#FEE2E2;color:#B91C1C">VOID</span>'
+            :pay?'<span class="pill" style="background:#DCFCE7;color:#0B7A55">PAID</span>'
+            :'<span class="pill" style="background:#F3F4F6;color:#4B5563">ISSUED</span>'}
+        </div>
+      </div>
     </div>
-    <div style="text-align:right">
-      <div class="h1">INVOICE</div>
-      <div style="font-weight:700">${esc(v.number)}</div>
-      <div class="muted">Issued ${esc(fmtS(String(v.issuedOn||'')))}</div>
+    <div class="band">
+      <div style="flex:1;min-width:0">
+        <div class="lbl">Billed to</div>
+        <div class="who">${esc(cl.name||'')}</div>
+        <div class="muted" style="margin-top:3px">
+          ${cl.contact?esc('Attn: '+cl.contact)+'<br/>':''}
+          ${cl.address?esc(cl.address)+'<br/>':''}
+          ${esc([cl.email,cl.phone].filter(Boolean).join('  ·  '))}
+          ${cl.reference?'<br/>'+esc('Ref: '+cl.reference):''}
+        </div>
+      </div>
+      <div style="flex:0 0 240px">
+        <div class="lbl">Details</div>
+        <div class="kv">
+          <div><b>Invoice no.</b> ${esc(v.number)}</div>
+          <div><b>Issue date</b> ${esc(issued)}</div>
+          <div><b>Currency</b> ${esc(v.currency||'')}</div>
+          ${pay&&pay.method?`<div><b>Paid via</b> ${esc(pay.method)}${pay.reference?esc(' · '+pay.reference):''}</div>`:''}
+        </div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Description</th><th class="r" style="width:170px">Amount</th></tr></thead>
+      <tbody><tr><td>${esc(v.notes||'Professional services')}</td><td class="r" style="font-weight:700">${esc(money(v.amount))}</td></tr></tbody>
+    </table>
+    <div class="tots">
+      <div class="row"><span>Subtotal</span><span>${esc(money(v.amount))}</span></div>
+      ${v.taxRate?`<div class="row"><span>${esc(sn.taxLabel||'VAT')} (${v.taxRate}%)</span><span>${esc(money(v.taxAmount))}</span></div>`:''}
+      <div class="row grand"><span>Total</span><span>${esc(money(v.total))}</span></div>
+    </div>
+    ${pay?`<div class="paidline">Received ${esc(fmtS(String(pay.paidOn||'')))} — thank you.</div>`:''}
+    <div class="foot">
+      ${sn.terms?`<div class="terms"><span class="lbl" style="display:block">Terms</span>${esc(sn.terms)}</div>`:''}
+      ${sn.footerText?`<div class="thanks">${esc(sn.footerText)}</div>`:''}
     </div>
   </div>
-  <div style="margin-bottom:6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6B7280">Billed to</div>
-  <div style="font-size:15px;font-weight:800">${esc(cl.name||'')}</div>
-  ${cl.contact?`<div class="muted">Attn: ${esc(cl.contact)}</div>`:''}
-  ${cl.address?`<div class="muted">${esc(cl.address)}</div>`:''}
-  <div class="muted">${esc([cl.email,cl.phone].filter(Boolean).join(' · '))}</div>
-  ${cl.reference?`<div class="muted">Ref: ${esc(cl.reference)}</div>`:''}
-  <table>
-    <thead><tr><th>Description</th><th class="r" style="width:160px">Amount</th></tr></thead>
-    <tbody>
-      <tr><td>${esc(v.notes||'Professional services')}</td><td class="r">${esc(money(v.amount))}</td></tr>
-      ${v.taxRate?`<tr><td class="muted">${esc(sn.taxLabel||'VAT')} (${v.taxRate}%)</td><td class="r">${esc(money(v.taxAmount))}</td></tr>`:''}
-      <tr class="tot"><td>Total</td><td class="r">${esc(money(v.total))}</td></tr>
-    </tbody>
-  </table>
-  ${sn.terms?`<div style="margin-top:16px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6B7280;margin-bottom:4px">Terms</div><div style="white-space:pre-wrap">${esc(sn.terms)}</div></div>`:''}
-  <div class="footer">${esc(sn.footerText||'')}</div>
   </body></html>`;
 }
 App._invView=(invId)=>{
   const v=(DB.tmInvoices||[]).find(x=>x.id===invId);if(!v)return;
-  if(!canBill())return toast('You need Clients → Billing & invoices','err');
+  if(!canBillView())return toast('You need Clients → Billing','err');
   try{
     const w=window.open('','_blank');
     if(!w){toast('Allow pop-ups to view invoices','warn');return;}
     w.document.open();w.document.write(_invHtml(v));w.document.close();
   }catch(e){toast('Could not open the invoice window','err');}
 };
+
+/* ── billing notifications: payments and invoices ping everyone who manages billing ── */
+function _notifyBillingFolks(key,txt,vars){
+  try{
+    const ids=(DB.users||[]).filter(u=>u.status==='Active'&&(isSuperU(u)||canUser(u,'locations','billing'))).map(u=>u.id);
+    notifyEventAll(key,ids,txt,'locations',vars||{});
+  }catch(e){console.warn('[billing notify]',e&&e.message);}
+}
+
+/* ── the "what we're waiting for" note that rides with a Waiting-on-client flag ──
+   Stored in tm_wait_notes (same composite key as tm_q_status); shown to the team on the
+   run card and client file, and to the CLIENT on the status page. Cleared automatically
+   when the client responds, or when the flag itself is cleared. */
+function _waitNoteOf(clId,date,qId){return(DB.tmWaitNotes||{})[_qsKey(clId,date,qId)]||null;}
+App._waitNoteAsk=(clId,date,qId)=>{
+  date=_normD(clId,date);
+  const q=(DB.questions||[]).find(x=>x.id===qId);
+  const cur=_waitNoteOf(clId,date,qId);
+  modalShell({title:'What are we waiting for?',sub:q?q.text:'',size:'max-w-sm',
+    body:`<div>
+      <textarea id="wn-note" rows="3" class="ui-input rf" maxlength="300" placeholder="e.g. Passport copies of all three partners">${esc((cur&&cur.note)||'')}</textarea>
+      <p style="font-size:11.5px;color:var(--c-text-3);margin-top:8px;line-height:1.5">This line is shown to the client on their status page, right under the item — so they know exactly what to send. Leave it empty to show nothing.</p>
+    </div>`,
+    footer:btnG('Skip','App.closeModal()')+btnP('Save',`App._waitNoteSave('${esc(clId)}','${esc(date)}','${esc(qId)}')`)});
+  setTimeout(()=>{const el=document.getElementById('wn-note');if(el)el.focus();},60);
+};
+App._waitNoteSave=(clId,date,qId)=>{
+  date=_normD(clId,date);
+  const key=_qsKey(clId,date,qId);
+  const note=(document.getElementById('wn-note')?.value||'').trim().slice(0,300);
+  DB.tmWaitNotes=DB.tmWaitNotes||{};
+  if(!note){
+    if(DB.tmWaitNotes[key]){delete DB.tmWaitNotes[key];
+      sb.from('tm_wait_notes').delete().eq('id',key).then(({error})=>{if(error)_syncErr('waiting note')(error);}).catch(_syncErr('waiting note'));}
+    closeModal();rr();return;
+  }
+  DB.tmWaitNotes[key]={note,setBy:S.uid,setAt:new Date().toISOString()};
+  sb.from('tm_wait_notes').upsert({id:key,checklist_id:clId,run_date:date,question_id:qId,note,set_by:S.uid,set_at:new Date().toISOString()},{onConflict:'id'})
+    .then(({error})=>{if(error)_syncErr('waiting note')(error);}).catch(_syncErr('waiting note'));
+  saveDB();closeModal();toast('Saved — the client will see this on their status page');rr();
+};
+function _waitNoteClear(clId,date,qId){
+  date=_normD(clId,date);
+  const key=_qsKey(clId,date,qId);
+  if((DB.tmWaitNotes||{})[key]){delete DB.tmWaitNotes[key];
+    sb.from('tm_wait_notes').delete().eq('id',key).then(()=>{}).catch(()=>{});}
+}
 
 /* ── share-link preferences (what the client's status page shows / allows) ── */
 function _sharePrefsOf(clientId){
@@ -408,6 +513,28 @@ function _qsDur(st){
   return d>0?d+'d '+(h%24)+'h':h+'h';
 }
 
+/* ── "Clients responded" — the compact card both dashboards show (round 9) ──
+   Recent replies (7 days) on checklists I'm on or created; tapping a row opens the client file. */
+function _clientRepliesWidget(){
+  const cutoff=new Date(Date.now()-7*86400000).toISOString();
+  const mine=(DB.tmClientReplies||[]).filter(r=>{
+    if(String(r.submittedAt||'')<cutoff)return false;
+    const c=clById(r.checklistId);
+    return !!c&&((c.assignees||[]).includes(S.uid)||c.createdBy===S.uid);
+  }).slice(0,3);
+  if(!mine.length)return'';
+  return `<div class="ui-card" style="border-left:3px solid #0EA5E9;padding:9px 14px;margin-bottom:12px">
+    <div style="font-size:11.5px;font-weight:800;margin-bottom:3px">${ic('send','w-3.5 h-3.5 inline')} Clients responded</div>
+    ${mine.map(r=>{const q=(DB.questions||[]).find(x=>x.id===r.questionId);const l=locById(r.clientId);
+      return `<div onclick="App._openClientFile('${esc(r.clientId)}')" style="display:flex;align-items:center;gap:7px;font-size:12px;padding:2px 0;cursor:pointer">
+        <span style="font-weight:700;flex-shrink:0">${esc(l?l.name:'Client')}</span>
+        <span style="flex:1;min-width:0;color:var(--c-text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q?q.text:'')}${r.message?' — “'+esc(String(r.message).slice(0,60))+'”':''}</span>
+        <span style="font-size:10px;font-weight:800;color:#1D4ED8;background:#DBEAFE;border-radius:99px;padding:1px 7px;flex-shrink:0">${(r.files||[]).length?(r.files||[]).length+' FILE'+((r.files||[]).length===1?'':'S'):r.kind==='confirm'?'CONFIRMED':'REPLY'}</span>
+        <span style="font-size:10px;color:var(--c-text-3);flex-shrink:0">${esc(_agoLabel(r.submittedAt))}</span>
+      </div>`;}).join('')}
+  </div>`;
+}
+
 /* ── loaders (all tolerant: an RLS-blocked table simply leaves its local copy empty) ── */
 async function _billingLoad(){
   try{
@@ -424,20 +551,45 @@ async function _billingLoad(){
     if(!inv.error&&Array.isArray(inv.data))DB.tmInvoices=_mInv(inv.data);
     if(!ivs.error&&ivs.data)DB.tmInvoiceSettings=_mInvSettings(ivs.data);
     if(!sp.error&&Array.isArray(sp.data)){DB.tmSharePrefs={};sp.data.forEach(r=>{DB.tmSharePrefs[r.client_id]={showTickets:r.show_tickets===true,showBilling:r.show_billing===true,allowRespond:r.allow_respond!==false};});}
-    if(!cr.error&&Array.isArray(cr.data))DB.tmClientReplies=(cr.data||[]).map(r=>({id:r.id,clientId:r.client_id,checklistId:r.checklist_id,date:r.run_date,questionId:r.question_id,kind:r.kind,message:r.message||'',files:Array.isArray(r.files)?r.files:[],submittedAt:r.submitted_at}));
+    if(!cr.error&&Array.isArray(cr.data))DB.tmClientReplies=_mReplies(cr.data);
   }catch(e){console.warn('[billing] load skipped:',e&&e.message);}
   _qcLoad();
+}
+function _mReplies(rows){return(rows||[]).map(r=>({id:r.id,clientId:r.client_id,checklistId:r.checklist_id,date:r.run_date,questionId:r.question_id,kind:r.kind,message:r.message||'',files:Array.isArray(r.files)?r.files:[],submittedAt:r.submitted_at}));}
+/* Refreshed on its own whenever the user lands on My Checklists or a client file — this is
+   what makes a client's reply (and the cleared waiting badge) appear without a full reload. */
+async function _repliesLoad(){
+  try{
+    const {data,error}=await sb.from('tm_client_replies').select('*').order('submitted_at',{ascending:false}).limit(400);
+    if(!error&&Array.isArray(data))DB.tmClientReplies=_mReplies(data);
+  }catch(e){}
 }
 /* Per-question costs: recent window + every open case's anchor date (mirrors _qsLoad). */
 async function _qcLoad(){
   try{
     const from=new Date(Date.now()-35*86400000).toISOString().slice(0,10);
+    const _t0=Date.now(); // rows written locally AFTER this can't be in the snapshot below
     const caseDates=[...new Set((DB.checklists||[]).filter(c=>isCase(c)).map(c=>caseDate(c)))];
-    const qs=[sb.from('tm_q_costs').select('*').gte('run_date',from)];
-    if(caseDates.length)qs.push(sb.from('tm_q_costs').select('*').in('run_date',caseDates));
+    const qs=[sb.from('tm_q_costs').select('*').gte('run_date',from),
+              sb.from('tm_wait_notes').select('*').gte('run_date',from)];
+    if(caseDates.length){qs.push(sb.from('tm_q_costs').select('*').in('run_date',caseDates));
+                         qs.push(sb.from('tm_wait_notes').select('*').in('run_date',caseDates));}
     const rs=await Promise.all(qs);
-    DB.tmQCosts=DB.tmQCosts||{};
-    rs.forEach(r=>{if(!r.error)(r.data||[]).forEach(row=>{DB.tmQCosts[row.id]={amount:Number(row.amount)||0,setBy:row.set_by||null,setAt:row.set_at||null};});});
+    DB.tmQCosts=DB.tmQCosts||{};DB.tmWaitNotes=DB.tmWaitNotes||{};
+    const _seenCost={},_seenNote={};
+    rs.forEach(r=>{if(!r.error)(r.data||[]).forEach(row=>{
+      if(row.amount!==undefined){_seenCost[row.id]=1;DB.tmQCosts[row.id]={amount:Number(row.amount)||0,setBy:row.set_by||null,setAt:row.set_at||null};}
+      else if(row.note!==undefined){_seenNote[row.id]=1;DB.tmWaitNotes[row.id]={note:row.note||'',setBy:row.set_by||null,setAt:row.set_at||null};}
+    });});
+    // Rows deleted server-side (a client responded, a colleague cleared a cost) must also
+    // disappear locally — but only reconcile inside the windows we actually fetched, and only
+    // when every query succeeded, so a network hiccup can never wipe good local state.
+    if(rs.every(r=>!r.error)){
+      const _inWin=d=>d>=from||caseDates.includes(d);
+      const _fresh=rec=>{const t=rec&&(rec.setAt||rec.changedAt);return t&&Date.parse(t)>=_t0-15000;}; // in-flight guard (see _qsLoad)
+      Object.keys(DB.tmWaitNotes).forEach(k=>{const d=String(k).split('|')[1];if(_inWin(d)&&!_seenNote[k]&&!_fresh(DB.tmWaitNotes[k]))delete DB.tmWaitNotes[k];});
+      Object.keys(DB.tmQCosts).forEach(k=>{const d=String(k).split('|')[1];if(_inWin(d)&&!_seenCost[k]&&!_fresh(DB.tmQCosts[k]))delete DB.tmQCosts[k];});
+    }
   }catch(e){console.warn('[q costs] load skipped:',e&&e.message);}
 }
 
@@ -447,4 +599,4 @@ window.fmtMoney=fmtMoney;window._invDefaults=_invDefaults;window._cliBilling=_cl
 window._cliPaid=_cliPaid;window._cliBalance=_cliBalance;window._cliUtilized=_cliUtilized;window._runUtilized=_runUtilized;window._qCostOf=_qCostOf;
 window._billingSave=_billingSave;window._invSettingsEnsure=_invSettingsEnsure;window._invHtml=_invHtml;
 window._sharePrefsOf=_sharePrefsOf;window._repliesFor=_repliesFor;window._replyForQ=_replyForQ;window._agoLabel=_agoLabel;window._qsDur=_qsDur;
-window._billingLoad=_billingLoad;window._qcLoad=_qcLoad;
+window._clientRepliesWidget=_clientRepliesWidget;window._billingLoad=_billingLoad;window._qcLoad=_qcLoad;window._repliesLoad=_repliesLoad;window._mReplies=_mReplies;window.canBillView=canBillView;window._notifyBillingFolks=_notifyBillingFolks;window._waitNoteOf=_waitNoteOf;window._waitNoteClear=_waitNoteClear;

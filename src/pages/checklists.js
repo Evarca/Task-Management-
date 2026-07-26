@@ -86,16 +86,7 @@ function _renderClModal(editing){
     </div>
     <!-- Scrollable body -->
     <div style="overflow-y:auto;flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:20px">
-      ${(!editing&&(DB.tmTemplates||[]).length)?`<div style="background:var(--c-surface-2);border-radius:12px;padding:10px 12px">
-        <div style="font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Start from a template</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${(DB.tmTemplates||[]).map(t=>`<span style="display:inline-flex;align-items:center;gap:4px">
-            <button type="button" onclick="App._tplApply('${esc(t.id)}')" class="ui-tab-pill${c._tplId===t.id?' on':''}" title="${esc(t.description||'')}">${esc(t.name)} <span style="font-size:9.5px;opacity:.7">${(t.questionIds||[]).length}q</span></button>
-            ${(t.createdBy===S.uid||isAdmin())?`<button type="button" onclick="App._tplDelete('${esc(t.id)}')" aria-label="Delete template ${esc(t.name)}" title="Delete template" style="width:20px;height:20px;display:grid;place-items:center;border-radius:6px;border:none;background:transparent;color:var(--c-text-3);cursor:pointer">${ic('x','w-3 h-3')}</button>`:''}
-          </span>`).join('')}
-        </div>
-        <div style="font-size:10.5px;color:var(--c-text-3);margin-top:6px">Picking one fills the questions below — a new client case in seconds. You can still adjust anything.</div>
-      </div>`:''}
+      
       <!-- Basic info -->
       <div class="space-y-3">
         <div>
@@ -179,7 +170,7 @@ function _renderClModal(editing){
     <!-- Sticky footer -->
     <div style="padding:14px 20px;border-top:1px solid var(--c-border);display:flex;gap:10px;background:var(--c-surface)">
       <button type="button" onclick="App.closeModal()" class="ui-btn ui-btn-ghost" style="flex:1">Cancel</button>
-      ${(can('checklists','create')&&(c.questionIds||[]).length)?`<button type="button" onclick="App._tplSaveAsk()" class="ui-btn ui-btn-ghost" title="Keep these questions as a reusable template" style="flex:0 0 auto">${ic('copy','w-4 h-4')} Save as template</button>`:''}
+      
       <button type="button" id="cl-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Saving…';try{App._saveCl(${editing});}catch(e){console.error('Save button error:',e);this.disabled=false;this.textContent='${editing?'Save changes':'Create checklist'}';}" class="ui-btn ui-btn-primary" style="flex:1">${editing?'Save changes':'Create checklist'}</button>
     </div>
   </div>`,'max-w-2xl');
@@ -403,70 +394,6 @@ App.delCl=(id)=>{
   }).catch(e=>console.error('delCl:',e));
 };
 
-/* ── TEMPLATES ──
-   A business-setup company runs the same steps for every client, slightly adjusted. A template is
-   that step list saved once: new client -> pick template -> case ready in seconds. Templates live
-   in their own new table (tm_templates); nothing existing changed shape. */
-App._tplApply=(tplId)=>{
-  const t=(DB.tmTemplates||[]).find(x=>x.id===tplId);if(!t||!CLD)return;
-  try{_snapshotCLD();}catch(e){} // keep whatever the user already typed before re-rendering
-  CLD.questionIds=(t.questionIds||[]).filter(qid=>(DB.questions||[]).some(q=>q.id===qid));
-  CLD.questionConfigs=JSON.parse(JSON.stringify(t.questionConfigs||{}));
-  if(t.department)CLD.department=t.department;
-  if(!CLD.name)CLD.name=t.name;
-  CLD.frequency='One-time';CLD.schedule='One-time';CLD.selectedDays=[];CLD.selectedDates=[];CLD.customDates=[];
-  CLD._tplId=t.id;
-  _renderClModal(false);
-  toast('Template applied — '+CLD.questionIds.length+' questions loaded');
-};
-App._tplSaveAsk=()=>{
-  if(!CLD||!can('checklists','create'))return;
-  _snapshotCLD();
-  const nm=CLD.name||'';
-  openModal(`<div style="padding:20px">
-    <h3 class="fd" style="font-size:16px;font-weight:800;margin-bottom:4px">Save as template</h3>
-    <p style="font-size:12.5px;color:var(--c-text-2);margin-bottom:12px">Keeps these ${(CLD.questionIds||[]).length} questions (and their settings) so the next client case starts in seconds.</p>
-    <label for="tpl-name" style="display:block;font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Template name</label>
-    <input id="tpl-name" value="${esc(nm)}" placeholder="e.g. Mainland LLC formation" class="ui-input rf" style="margin-bottom:14px"/>
-    <div style="display:flex;gap:10px">
-      <button type="button" onclick="App._tplBack()" class="ui-btn ui-btn-ghost" style="flex:1">Back</button>
-      <button type="button" onclick="App._tplSave()" class="ui-btn ui-btn-primary" style="flex:1">Save template</button>
-    </div>
-  </div>`,'max-w-sm');
-};
-App._tplBack=()=>{_renderClModal(!!clById(CLD?.id));};
-App._tplSave=()=>{
-  if(!CLD||!can('checklists','create'))return;
-  const name=($('#tpl-name')?.value||'').trim();
-  if(!name)return toast('Give the template a name','err');
-  const t={id:uid('tpl'),name,description:CLD.description||'',department:CLD.department||'',
-    questionIds:(CLD.questionIds||[]).slice(),questionConfigs:JSON.parse(JSON.stringify(CLD.questionConfigs||{})),
-    createdBy:S.uid,createdAt:new Date().toISOString()};
-  DB.tmTemplates=DB.tmTemplates||[];DB.tmTemplates.push(t);
-  sb.from('tm_templates').upsert({id:t.id,name:t.name,description:t.description,department:t.department,
-    question_ids:t.questionIds,question_configs:t.questionConfigs,created_by:S.uid},{onConflict:'id'})
-    .then(({error})=>{if(error)_syncErr('template')(error);}).catch(_syncErr('template'));
-  log(fullName(me()),'Template saved',name);
-  saveDB();toast('Template saved — it now appears when creating a checklist');
-  _renderClModal(!!clById(CLD.id));
-};
-App._tplDelete=(tplId)=>{
-  const t=(DB.tmTemplates||[]).find(x=>x.id===tplId);if(!t)return;
-  if(!(t.createdBy===S.uid||isAdmin()))return;
-  if(!confirm('Delete template "'+t.name+'"? Existing checklists are not affected.'))return;
-  DB.tmTemplates=DB.tmTemplates.filter(x=>x.id!==tplId);
-  sb.from('tm_templates').delete().eq('id',tplId).then(()=>{}).catch(()=>{});
-  saveDB();toast('Template deleted','warn');
-  if(CLD)_renderClModal(!!clById(CLD.id));else rr();
-};
-async function _tplLoad(){
-  try{
-    const {data,error}=await sb.from('tm_templates').select('*').order('created_at',{ascending:true});
-    if(error)return;
-    DB.tmTemplates=(data||[]).map(r=>({id:r.id,name:r.name,description:r.description||'',department:r.department||'',
-      questionIds:r.question_ids||[],questionConfigs:r.question_configs||{},createdBy:r.created_by||null,createdAt:r.created_at||null}));
-  }catch(e){console.warn('[templates] load skipped:',e&&e.message);}
-}
+/* (Templates were removed in round 9 — the tm_templates table is untouched, only the feature is gone.) */
 
-/* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.Q_TYPES=Q_TYPES;window.Q_TYPE_CLR=Q_TYPE_CLR;window.Q_TYPE_BG=Q_TYPE_BG;window.NUM_CONDITIONS=NUM_CONDITIONS;window.clsPage=clsPage;window._renderClModal=_renderClModal;window._freqUI=_freqUI;window._tplLoad=_tplLoad;
+window.Q_TYPES=Q_TYPES;window.Q_TYPE_CLR=Q_TYPE_CLR;window.Q_TYPE_BG=Q_TYPE_BG;window.NUM_CONDITIONS=NUM_CONDITIONS;window.clsPage=clsPage;window._renderClModal=_renderClModal;window._freqUI=_freqUI;

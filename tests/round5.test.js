@@ -333,27 +333,4 @@ describe('4b — bugs the dry run caught', () => {
   });
 });
 
-/* ═══ 5 — templates ═══ */
-describe('5 — templates make the next client instant', () => {
-  it('saves the open checklist as a template and applies it to a new one', () => {
-    W.DB.tmTemplates.push({ id: 'tpl1', name: 'Mainland LLC formation', description: '', department: 'Ops',
-      questionIds: ['q1', 'q2'], questionConfigs: {}, createdBy: 'boss', createdAt: TODAY });
-    W.App.editCl(null);
-    expect(document.body.innerHTML).toContain('Start from a template');
-    expect(document.body.innerHTML).toContain('Mainland LLC formation');
-    W.App._tplApply('tpl1');
-    expect(W.CLD.questionIds).toEqual(['q1', 'q2']);
-    expect(W.CLD.frequency).toBe('One-time');     // a template starts a case
-    expect(W.CLD.department).toBe('Ops');
-    W.App.closeModal(); W.CLD = null;
-  });
-
-  it('applying a template drops questions that no longer exist', () => {
-    W.DB.tmTemplates.push({ id: 'tpl1', name: 'T', description: '', department: '',
-      questionIds: ['q1', 'q_gone'], questionConfigs: {}, createdBy: 'boss', createdAt: TODAY });
-    W.App.editCl(null);
-    W.App._tplApply('tpl1');
-    expect(W.CLD.questionIds).toEqual(['q1']);
-    W.App.closeModal(); W.CLD = null;
-  });
-});
+/* (5 — templates: the feature was removed in round 9; its tests went with it.) */
