@@ -94,6 +94,7 @@ function _approvalInbox(){
       subject:(c?.name||'Checklist')+(a.date?' · '+fmtD(a.date):''),
       payload:a, status:st, decidedBy:null, decidedAt:null,
       location:u.location||'', dept:u.department||'',
+      _canDecide:isAdmin()||u.managerId===S.uid||can('checklists','approve'),
       _src:{coll:'approvals',id:a.id}
     });
   });
@@ -112,12 +113,15 @@ function _approvalInbox(){
       payload:{...e,createdAt:e.requestedAt}, status:st,
       decidedBy:e.decidedBy||null, decidedAt:e.decidedAt||null,
       location:u.location||'', dept:u.department||'',
+      _canDecide:_ansCanDecide(e),
       _src:{coll:'tmAnswerEdits',id:e.id}
     });
   });
   return items;
 }
-function _approvalPendingCount(){return _approvalInbox().filter(x=>x.status==='Pending').length;}
+/* The red number counts only what YOU can decide. Your own pending request still shows in
+   the inbox list, but it is not a badge you have no way to clear. */
+function _approvalPendingCount(){return _approvalInbox().filter(x=>x.status==='Pending'&&x._canDecide).length;}
 
 /* ── Boot init (idempotent) ── */
 function _hrmInit(){

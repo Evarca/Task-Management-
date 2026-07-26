@@ -30,6 +30,15 @@ function _feedbackTabContent(uid){
 
 
 function notificationsPage(){
+  // Seen = read: while this page is open, the unread ones flip after a beat, so the red
+  // bubble never survives an actual visit. (Each row can still be clicked immediately.)
+  try{
+    if(DB.notifications.some(n=>n.userId===S.uid&&!n.read)){
+      clearTimeout(window._autoReadT);
+      window._autoReadT=setTimeout(()=>{try{if(S.route==='notifications')App._silentReadAll();}catch(e){}},1500);
+    }
+  }catch(e){}
+
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>(b.time||'').localeCompare(a.time||'')).slice(0,80);
   // Track which were unread BEFORE marking them (so the dot shows on this render)
@@ -163,6 +172,17 @@ function _markNotifRead(id){
     .then(({error})=>{if(error)console.warn('[notif read]',error.message);})
     .catch(e=>console.warn('[notif read]',e.message));
 }
+/* Silent flavour used by the auto-read-on-view hook: no toast, one scoped write. */
+App._silentReadAll=()=>{
+  const uid=S.uid;
+  const mine=DB.notifications.filter(n=>n.userId===uid&&!n.read);
+  if(!mine.length)return;
+  mine.forEach(n=>n.read=true);
+  _invalidateNotifCache();saveDB();
+  sb.from('notifications').update({read:true}).eq('user_id',uid).eq('read',false)
+    .then(()=>{}).catch(()=>{});
+  rr();
+};
 App._markAllNotifsRead=()=>{
   const uid=S.uid;
   const mine=DB.notifications.filter(n=>n.userId===uid&&!n.read);

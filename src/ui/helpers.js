@@ -35,8 +35,8 @@ const caseSub=c=>isCase(c)?((DB.submissions||[]).find(s=>s.checklistId===c.id&&s
 const isShared=c=>!!c&&(isCase(c)||c.anyOne===true);
 
 function clOn(c,date){if(c.status&&c.status!=='Active')return false;
-  if(c.startDate&&date<c.startDate)return false;
-  if(c.endDate&&date>c.endDate)return false;
+  if(c.startDate&&date<String(c.startDate).slice(0,10))return false;
+  if(c.endDate&&date>String(c.endDate).slice(0,10))return false; // hard stop — cases included
   if(c.frequency==='One-time'){
     // Open: shows every day from the case date on. Closed: shows through its completion day,
     // then stops appearing on later days (it lives on in All results / the client file).

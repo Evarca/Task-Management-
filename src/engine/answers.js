@@ -140,7 +140,8 @@ App._ansSubmit=async(clId,date,qId)=>{
   // An approved edit is spent once the new answer lands.
   const ap=_ansEditApproved(id);
   if(ap){ap.status='Used';ap.oldResponse=prev?prev.response:null;ap.oldComment=prev?prev.comment:null;
-    _pushRow('tm_answer_edits',_ansEditRow(ap),'edit request');}
+    sb.from('tm_answer_edits').update({status:'Used',old_response:ap.oldResponse,old_comment:ap.oldComment}).eq('id',ap.id)
+      .then(({error})=>{if(error)_syncErr('edit request')(error);}).catch(_syncErr('edit request'));}
   log(fullName(me()),prev?'Edited answer':'Submitted answer',c.name+' · '+String(q.text).slice(0,60));
   // Escalation fires NOW, per answer — a case can stay open for weeks, so waiting for the
   // final run submit would mean no ticket and no red flag until it is far too late.
@@ -221,7 +222,11 @@ App._ansEditDecide=(editId,action)=>{
   const approve=action==='approve';
   e.status=approve?'Approved':'Rejected';
   e.decidedBy=S.uid;e.decidedAt=new Date().toISOString();
-  _pushRow('tm_answer_edits',_ansEditRow(e),'edit request');
+  // TARGETED UPDATE, never upsert: an upsert runs the INSERT policy (requested_by = auth.uid())
+  // against the proposed row even when it resolves to a conflict-update — which rejected every
+  // decision made by anyone other than the requester ("Couldn't save edit request").
+  sb.from('tm_answer_edits').update({status:e.status,decided_by:e.decidedBy,decided_at:e.decidedAt,decision_note:e.decisionNote||''}).eq('id',e.id)
+    .then(({error})=>{if(error)_syncErr('edit decision')(error);}).catch(_syncErr('edit decision'));
   if(approve){
     const a=(DB.tmAnswers||[]).find(x=>x.id===e.answerId);
     if(a){a.locked=false;a.updatedAt=new Date().toISOString();
@@ -276,6 +281,17 @@ async function _ansLoadDate(dateISO){
   try{
     const {data,error}=await sb.from('tm_answers').select('*').eq('run_date',dateISO);
     if(!error)_applyAnswers(_mAns(data),{replaceDate:dateISO});
+    // Open cases run on THEIR OWN date, not the day on screen — refresh those rows too, plus
+    // lock states via edit requests and the working statuses. This is what makes an unlock
+    // approved on another device appear here on the next tab focus.
+    const caseDates=[...new Set((DB.checklists||[]).filter(c=>isCase(c)).map(c=>caseDate(c)))].filter(d=>d!==dateISO);
+    if(caseDates.length){
+      const extra=await sb.from('tm_answers').select('*').in('run_date',caseDates);
+      if(!extra.error)_applyAnswers(_mAns(extra.data),{});
+    }
+    const eds=await sb.from('tm_answer_edits').select('*').order('requested_at',{ascending:false});
+    if(!eds.error)DB.tmAnswerEdits=_mAnsEdit(eds.data);
+    _qsLoad();
   }catch(e){console.warn('[answers] date load skipped:',e&&e.message);}
 }
 /* Merge server rows over local ones without dropping an answer submitted seconds ago that

@@ -145,3 +145,67 @@ describe('shared (toggle ON) and cases keep the round-2 model', () => {
     expect(W.DB.tmAnswers.length).toBe(0);
   });
 });
+
+/* ═══ round 7b — the four field reports ═══ */
+describe('field fixes: end date, edit requests, badges', () => {
+  it('an end date is a hard stop — for recurring checklists AND open cases', () => {
+    const daily = mkCl({ id: 'r9', endDate: '2000-01-01' });
+    expect(W.clOn(daily, TODAY)).toBe(false);
+    const c = mkCl({ id: 'case9', frequency: 'One-time', schedule: 'One-time',
+      startDate: '1999-12-01', endDate: '2000-01-01', anyOne: false });
+    expect(W.clOn(c, TODAY)).toBe(false);         // past its end date, even though unsubmitted
+    expect(W.clOn(c, '1999-12-15')).toBe(true);   // was live inside its window
+    // timestamps stored by the full platform can't leak it either
+    const ts = mkCl({ id: 'r10', endDate: '2000-01-01T00:00:00.000Z' });
+    expect(W.clOn(ts, TODAY)).toBe(false);
+  });
+
+  it('saving a One-time case keeps its end date now', () => {
+    W.App.editCl(null);
+    W.CLD.name = 'End dated case'; W.CLD.questionIds = ['q1']; W.CLD.frequency = 'One-time';
+    document.getElementById('cn-sd').value = TODAY;
+    document.getElementById('cn-ed').value = '2099-01-01';   // save reads the form fields
+    W.App._saveCl(false);
+    const saved = W.DB.checklists.find(x => x.name === 'End dated case');
+    expect(saved.endDate).toBe('2099-01-01');
+    W.CLD = null;
+  });
+
+  it('deciding an edit request writes a targeted UPDATE, never an upsert', () => {
+    const src = String(W.App._ansEditDecide);
+    expect(src).toContain(".update(");
+    expect(src).not.toContain("_pushRow('tm_answer_edits'");
+  });
+
+  it('the approvals badge counts only requests YOU can decide', () => {
+    const c = mkCl({ anyOne: true });
+    W.DB.tmAnswers.push({ id: W._ansId(c.id, TODAY, 'q1'), checklistId: c.id, date: TODAY,
+      questionId: 'q1', response: 'Yes', comment: '', photos: [], submittedBy: 'ana',
+      submittedAt: new Date().toISOString(), locked: true, editCount: 0 });
+    W.DB.tmAnswerEdits.push({ id: 'ae1', answerId: W._ansId(c.id, TODAY, 'q1'), checklistId: c.id,
+      date: TODAY, questionId: 'q1', requestedBy: 'ana', requestedAt: new Date().toISOString(),
+      reason: 'typo', status: 'Pending', decidedBy: null, decidedAt: null, decisionNote: '', oldResponse: null, oldComment: null });
+    W.S.uid = 'ana';                               // the requester: sees it, but no red count
+    expect(W._approvalPendingCount()).toBe(0);
+    expect(W._approvalInbox().some(x => x.id === 'ae-ae1')).toBe(true);
+    W.S.uid = 'boss';                              // her manager: counts
+    expect(W._approvalPendingCount()).toBe(1);
+    W.App._ansEditDecide('ae1', 'approve');        // deciding clears it
+    expect(W._approvalPendingCount()).toBe(0);
+  });
+
+  it('viewing the Alerts page schedules the silent read that clears the bell', () => {
+    W.S.uid = 'ana';
+    W.notify('ana', 'Test ping', 'general', null);
+    expect(W.DB.notifications.some(n => n.userId === 'ana' && !n.read)).toBe(true);
+    W.App._silentReadAll();
+    expect(W.DB.notifications.some(n => n.userId === 'ana' && !n.read)).toBe(false);
+    // and the page render wires the auto-read timer
+    expect(String(W.notificationsPage)).toContain('_silentReadAll');
+  });
+
+  it('opening the approvals tab refetches the edit-request tables', () => {
+    const src = String(W._lazyLoad);
+    expect(src).toContain('_ansLoadWindow');
+  });
+});

@@ -212,7 +212,7 @@ instead of a blank page (`_RETIRED_ROUTES` in `src/ui/nav.js`).
 npm install       # install dependencies
 npm run dev       # local dev server
 npm run build     # production build into dist/
-npm test          # route sweep + reference audit + behaviour tests (239 assertions)
+npm test          # route sweep + reference audit + behaviour tests (245 assertions)
 ```
 
 ## Deploying
@@ -319,6 +319,13 @@ Key modules:
 
 ### RLS worth knowing about
 
+One hard-won rule: **decide with UPDATE, never upsert someone else's row.** Postgres runs the
+INSERT policy against the proposed row of an `INSERT … ON CONFLICT` even when it resolves to an
+update — so upserting an edit request whose `requested_by` is another person bounces with
+"you may not have permission". Every decision path (approving/rejecting an edit, marking it Used)
+is a targeted `.update()` for exactly this reason.
+
+
 `tm_answers` is where the real enforcement lives, and it is not just client-side:
 
 - **Insert** requires `submitted_by = auth.uid()` — you cannot file an answer under someone
@@ -336,7 +343,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 239 assertions in eight files:
+`npm test` runs 245 assertions in eight files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every

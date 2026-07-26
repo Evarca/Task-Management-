@@ -157,7 +157,10 @@ async function _lazyLoad(kind){
   try{
     const c=_cutoff30ISO();
     if(kind==='tickets'){const{data,error}=await sb.from('tickets').select('*').gte('created_at',c).order('created_at',{ascending:false});if(error){console.error('[TK] lazy error:',error.message);}else _applyTickets(data);}
-    else if(kind==='approvals'){const{data,error}=await sb.from('approvals').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyApprovals(data);}
+    else if(kind==='approvals'){const{data,error}=await sb.from('approvals').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyApprovals(data);
+      // Edit requests + answer lock states live in the tm_ tables — a manager opening the
+      // inbox must see a request made seconds ago on another device.
+      try{await _ansLoadWindow(_cutoff30ISO());}catch(e){}}
     else if(kind==='notifications'){const{data,error}=await sb.from('notifications').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyNotifications(data);}
     else if(kind==='feedback'){const{data,error}=await sb.from('feedback').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyFeedback(data);}
     saveDB();

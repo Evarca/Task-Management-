@@ -193,7 +193,8 @@ function _freqUI(freq){
   if(freq==='One-time')return `<div style="font-size:12px;color:#6B7280;line-height:1.55">
     <b style="color:#374151">A case runs once.</b> It opens on the start date and stays on everyone's
     list — answers accumulating day after day — until every question is answered and it is
-    submitted. Set the final deadline below; the client sees progress against it.</div>`;
+    submitted. Set the final deadline below; the client sees progress against it. An <b>end
+    date</b>, if you set one, is a hard stop: after it the case leaves the daily lists.</div>`;
   if(freq==='Daily')return''; // Daily needs no options — it runs every day
 
   if(freq==='Weekly'){
@@ -299,12 +300,13 @@ App._saveCl=(editing)=>{
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   if(CLD.frequency==='One-time'){
     // The start date is the case's anchor: every answer lives on it. Never let it be empty,
-    // never let it move once answers exist, and never let an end date cut an open case short.
+    // and never let it move once answers exist. An END date, if set, is a hard stop — after
+    // it the case leaves the daily lists (it stays on the client file).
     CLD.schedule='One-time';CLD.selectedDays=[];CLD.selectedDates=[];CLD.customDates=[];
     const _old=editing?clById(CLD.id):null;
     if(_old&&isCase(_old)&&_ansAll(_old.id,caseDate(_old)).length)CLD.startDate=_old.startDate;
     if(!CLD.startDate)CLD.startDate=todayISO();
-    CLD.endDate=null;
+    if(CLD.endDate&&CLD.startDate&&CLD.endDate<CLD.startDate)CLD.endDate=CLD.startDate;
   }
   CLD.scheduleTime=$('#cn-time')?.value||null;
   CLD._deadlineDate=$('#cn-ddate')?($('#cn-ddate').value||null):_clDeadlineDate(CLD.id);
