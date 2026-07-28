@@ -271,7 +271,7 @@ async function _ansLoadWindow(fromISO){
     ]);
     if(!ans.error)_applyAnswers(_mAns(ans.data),{replaceFrom:fromISO});
     if(!eds.error)DB.tmAnswerEdits=_mAnsEdit(eds.data);
-    if(!meta.error){DB.tmMeta={};(meta.data||[]).forEach(r=>{DB.tmMeta[r.checklist_id]={deadlineDate:r.deadline_date||null};});}
+    if(!meta.error){DB.tmMeta={};(meta.data||[]).forEach(r=>{DB.tmMeta[r.checklist_id]={deadlineDate:r.deadline_date||null,requireSignoff:r.require_signoff===true};});}
     // Case runs live on their case date, which can be older than the window — fetch those too.
     const caseDates=[...new Set((DB.checklists||[]).filter(c=>isCase(c)).map(c=>caseDate(c)))].filter(d=>d<fromISO);
     if(caseDates.length){
@@ -432,10 +432,15 @@ function _caseAlerts(c,today,nowM,sent){
 }
 
 /* ── checklist meta (the optional deadline date) ── */
-function _tmMetaSave(clId,deadlineDate){
+/* The optional deadline date AND the case sign-off rule. Both live here rather than on the
+   `checklists` row on purpose: that table is written by a whole-table upsert from every
+   client, so a stale tab can silently revert it. tm_checklist_meta is targeted-write only. */
+function _tmMetaSave(clId,deadlineDate,requireSignoff){
   DB.tmMeta=DB.tmMeta||{};
-  DB.tmMeta[clId]={deadlineDate:deadlineDate||null};
-  sb.from('tm_checklist_meta').upsert({checklist_id:clId,deadline_date:deadlineDate||null,updated_at:new Date().toISOString()},{onConflict:'checklist_id'})
+  const prev=DB.tmMeta[clId]||{};
+  const rs=(requireSignoff===undefined)?(prev.requireSignoff===true):(requireSignoff===true);
+  DB.tmMeta[clId]={deadlineDate:deadlineDate||null,requireSignoff:rs};
+  sb.from('tm_checklist_meta').upsert({checklist_id:clId,deadline_date:deadlineDate||null,require_signoff:rs,updated_at:new Date().toISOString()},{onConflict:'checklist_id'})
     .then(({error})=>{if(error)_syncErr('checklist deadline')(error);}).catch(_syncErr('checklist deadline'));
 }
 

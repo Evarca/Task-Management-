@@ -159,6 +159,34 @@ gate is real even against the raw API. The one deliberate exception: the per-que
 can also be written by that run's assignees (`tm_q_costs` RLS checks the checklist's assignee
 list) — entering what a step cost is part of doing the step.
 
+## Round 11 — restoring what round 10 broke
+
+Round 10 made `isShared` mean `anyOne === true`, which pulled the **shared per-question engine**
+out of any case whose toggle was off — and every real case had it off, because the toggle used
+to be dead for cases. That silently removed per-question **Submit**, the *In progress /
+Waiting on client / Waiting on authority* chips, the waiting notes, per-question **costs**, and
+the client file's step list. Restored, with the toggle's intent kept:
+
+- **A One-time case always uses the shared per-question engine.** Not negotiable, not switchable —
+  that engine *is* case management.
+- **A case's closing rule is its own switch**, shown in the builder only for One-time frequency:
+  *"Every assignee must sign off"*. Off (the default, and how every existing case already
+  behaves) → any one assignee closes it. On → every assignee signs off first; the run footer
+  says "n of m signed off" and offers **✓ Sign off**, the card carries an `n/m SIGNED OFF` chip,
+  and the client file gains a sign-off strip under the step list.
+- **That flag lives on `tm_checklist_meta.require_signoff`, never on `checklists.any_one`.**
+  Reason worth remembering: `_sync()` pushes the **whole** `checklists` table from each client, so
+  a tab holding a stale cache silently reverts any server-side edit to that table — which is
+  exactly why two migrations against `any_one` were undone within seconds of being applied.
+  `tm_checklist_meta` is targeted-write only, so a flag there is safe.
+- `tm_client_status_v2` now derives `done` / `case_open` from `require_signoff` too, so the
+  client's page and the app can never disagree about whether a case is finished.
+- The client link is unchanged and verified end-to-end against the live database: the team marks
+  a step *Waiting on client* and types what it needs → the client sees that exact line on their
+  link → they reply, confirm, or upload documents → files land in the client's Documents under
+  **From client**, the waiting flag and its note clear, and the creator plus every assignee are
+  notified.
+
 ## Round 10
 
 - **The toggle rules cases too** (see "How a checklist run works" above) — the old
@@ -469,7 +497,7 @@ hover. Theme lives in `src/ui/charts.js`.
 
 ## Tests
 
-`npm test` runs 300 assertions in eleven files:
+`npm test` runs 305 assertions in eleven files:
 
 - **`tests/routes.test.js`** — renders every route for Super Admin, Manager and Employee; checks the
   retired routes redirect; audits every inline `onclick` handler across every route and every

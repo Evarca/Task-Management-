@@ -131,11 +131,16 @@ describe('shared (toggle ON) and cases keep the round-2 model', () => {
     expect(W.subForCl(c, 'ben', TODAY)).toBeTruthy();      // closed for Ben too
   });
 
-  it('the toggle decides for One-time cases too (changed in round 10)', () => {
+  it('a case always uses the shared per-question engine; the toggle only decides closing', () => {
     const on  = mkCl({ id: 'caseA', frequency: 'One-time', schedule: 'One-time', startDate: TODAY, anyOne: true });
     const off = mkCl({ id: 'caseB', frequency: 'One-time', schedule: 'One-time', startDate: TODAY, anyOne: false });
-    expect(W.isShared(on)).toBe(true);    // ON: one shared run
-    expect(W.isShared(off)).toBe(false);  // OFF: each assignee submits their own copy — even on a case
+    expect(W.isShared(on)).toBe(true);            // per-question submit / statuses / costs
+    expect(W.isShared(off)).toBe(true);           // …exactly the same with the toggle off
+    expect(W.needsAllSignoff(on)).toBe(false);    // a case closes on the first sign-off by default
+    expect(W.needsAllSignoff(off)).toBe(false);   // the any_one column has no say for cases
+    W.DB.tmMeta[off.id] = { requireSignoff: true };
+    expect(W.needsAllSignoff(off)).toBe(true);    // opted in deliberately, on tm_checklist_meta
+    expect(W.needsAllSignoff(mkCl({ id: 'daily1', anyOne: false }))).toBe(false); // not a case
   });
 
   it('per-answer submit is refused on an individual checklist', async () => {

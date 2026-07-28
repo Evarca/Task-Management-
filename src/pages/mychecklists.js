@@ -94,7 +94,7 @@ function homeDash(){
     const prog=_ansProgress(c,today);
     // R10: on a personal list an INDIVIDUAL run counts as done only when MY copy is in —
     // a teammate's submission never closes yours (subForCl already encodes both models).
-    const s2=isShared(c)?runSub(c.id,today):subForCl(c,S.uid,today);
+    const s2=subForCl(c,S.uid,today);   // own-or-shared, and never a teammate's sign-off
     const submitted=!!s2&&s2.status!=='Editing';
     return{c,prog,submitted,overdue:!submitted&&_clOverdue(c,today),pct:prog.total?Math.round(prog.done/prog.total*100):(submitted?100:0)};
   });
@@ -208,11 +208,14 @@ function myClsPage(){
 function _clFooter(c,date,sub,isPast,isFuture,u){
   const cid=c.id;
   const prog=isShared(c)?_ansProgress(c,date):_ownProgress(c,date);
+  const so=needsAllSignoff(c)?caseSignoff(c):null;   // case where EVERY assignee must sign off
   // Already closed: the run is shared, so whoever pressed Submit closed it for everyone.
   if(sub&&sub.status!=='Editing'){
     const by=uById(sub.userId);
     const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-    const left='<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#0D7A4E;font-weight:600">'+ic('check','w-3.5 h-3.5')+'Submitted by '+esc(by?fullName(by):'a teammate')+(st?' · '+st:'')+'</span>';
+    const left=so
+      ?'<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#0D7A4E;font-weight:600">'+ic('check','w-3.5 h-3.5')+'You signed off'+(st?' · '+st:'')+(so.complete?' — everyone is in':' · waiting on '+(so.total-so.done)+' more')+'</span>'
+      :'<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#0D7A4E;font-weight:600">'+ic('check','w-3.5 h-3.5')+'Submitted by '+esc(by?fullName(by):'a teammate')+(st?' · '+st:'')+'</span>';
     const right=(sub.status==='Pending Approval'||sub.status==='Pending')
       ?'<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>'
       :'';
@@ -227,6 +230,10 @@ function _clFooter(c,date,sub,isPast,isFuture,u){
     const left=prog.total-prog.done;
     return '<span style="font-size:12px;color:#B8B5AC">'+prog.done+' of '+prog.total+(isShared(c)?' answers submitted':' answered')+'</span>'
       +'<button class="submit-pill no" disabled title="'+(isShared(c)?'Submit every question first':'Answer every question first')+'" style="opacity:.45;cursor:not-allowed">'+left+' question'+(left===1?'':'s')+' left</button>';
+  }
+  if(so){
+    return '<span style="font-size:12px;color:#0D7A4E;font-weight:600">All answers in — '+so.done+' of '+so.total+' signed off</span>'
+      +'<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" title="Every assignee signs this case off before it closes" class="submit-pill go" data-cl="'+cid+'">✓ Sign off</button>';
   }
   return '<span style="font-size:12px;color:#0D7A4E;font-weight:600">All answers in — ready to submit</span>'
     +'<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">✓ Submit checklist</button>';
@@ -296,6 +303,7 @@ function _clCard(c,date){
         <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
           ${isCase(c)?`<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:#EEF2FF;color:#4338CA;letter-spacing:.03em" title="A one-time client case — open until every question is answered and it is submitted">CASE</span>`:''}
           ${isCase(c)&&!isSubmitted?`<span style="font-size:11px;color:#B8B5AC">open since ${fmtS(caseDate(c))}</span>`:''}
+          ${needsAllSignoff(c)?(()=>{const so=caseSignoff(c);return `<span title="Every assignee signs this case off before it closes" style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:${so.complete?'#DCFCE7':'#FEF3C7'};color:${so.complete?'#0B7A55':'#92400E'}">${so.done}/${so.total} SIGNED OFF</span>`;})():''}
           ${c.department?`<span style="font-size:12px;color:#B8B5AC">${esc(c.department)}</span>`:''}
           ${dl?`<span title="Deadline" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:${_clOverdue(c,date)&&!isSubmitted?'#DC2626':'#B8B5AC'};flex-shrink:0">${ic('clock','w-3 h-3')}${esc(dl)}</span>`:''}
           ${prog.total?(isSubmitted?_subBadges(c,sub,{small:true})
@@ -607,10 +615,12 @@ App._submitRun=async(clId,date)=>{
   let responses;
   if(isShared(c)){
     /* SHARED — one submission per checklist per run, whoever closes it. */
-    const existing=runSub(clId,date);
+    // A case that needs every sign-off checks MY OWN submission — a teammate signing off
+    // does not discharge mine. Anything else is closed by the first submission.
+    const existing=needsAllSignoff(c)?subFor(clId,S.uid,date):runSub(clId,date);
     if(existing&&existing.status!=='Editing'){
       const by=uById(existing.userId);
-      toast('Already submitted'+(by&&by.id!==S.uid?' by '+fullName(by):'')+' for this date','warn');
+      toast(needsAllSignoff(c)?'You have already signed this case off':('Already submitted'+(by&&by.id!==S.uid?' by '+fullName(by):'')+' for this date'),'warn');
       delete RUN[clId];S.expandedCl=null;render();return;
     }
     // Every question must carry a submitted answer — that gate is the feature.

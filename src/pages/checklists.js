@@ -153,9 +153,8 @@ function _renderClModal(editing){
       <!-- Assign -->
       <div>
         <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-2">Assign to</label>
-        <div class="bg-ink-50 rounded-xl p-3 mb-2">
-          ${mkTog('cn-anyone',c.anyOne||false,'Any one assignee can complete')}
-          <p style="font-size:11px;color:#9CA3AF;margin-top:2px">On: ONE shared run — people answer question by question, statuses and per-step costs are shared, and one submission closes it for everyone. Off: every assignee fills and submits their OWN copy — a teammate's submission never closes yours. This now applies to One-time client cases too.</p>
+        <div id="cn-runmode" class="bg-ink-50 rounded-xl p-3 mb-2">
+          ${_runModeUI(c)}
         </div>
         <div class="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
           ${cands.map(u=>`<label class="flex items-center gap-2.5 p-2.5 rounded-xl border-2 cursor-pointer transition ${(c.assignees||[]).includes(u.id)?'border-brand-400 bg-brand-50':'border-ink-100 hover:border-ink-200'}">
@@ -256,7 +255,21 @@ App._freqChange=f=>{
   }
   if(f==='Custom'&&!CLD._calYear){const n=new Date();CLD._calYear=n.getFullYear();CLD._calMonth=n.getMonth();}
   const sw=$('#cn-sched');if(sw)sw.innerHTML=_freqUI(f);
+  // the run-mode switch differs for a case — swap it in without losing anything else typed
+  const rm=$('#cn-runmode');if(rm)rm.innerHTML=_runModeUI(CLD);
 };
+/* The run-mode switch is CONTEXTUAL: a One-time case gets the sign-off rule (stored on
+   tm_checklist_meta), everything else gets the shared/individual toggle. Re-rendered by
+   _freqChange, so switching frequency mid-edit swaps the right switch in. */
+function _runModeUI(c){
+  if((c.frequency||'')==='One-time'){
+    const on=(c._requireSignoff!==undefined)?(c._requireSignoff===true):(((DB.tmMeta||{})[c.id]||{}).requireSignoff===true);
+    return mkTog('cn-signoff',on,'Every assignee must sign off')
+      +'<p style="font-size:11px;color:#9CA3AF;margin-top:2px">A client case is always worked together: everyone answers question by question, and the working statuses, waiting notes and per-step costs are shared. This switch only decides <b>who closes it</b> — off: any one assignee closes the case; on: every assignee signs off first.</p>';
+  }
+  return mkTog('cn-anyone',c.anyOne||false,'Any one assignee can complete')
+    +'<p style="font-size:11px;color:#9CA3AF;margin-top:2px">On: ONE shared run — people answer question by question, statuses and per-step costs are shared, and one submission closes it for everyone. Off: every assignee fills and submits their OWN copy — a teammate\'s submission never closes yours.</p>';
+}
 App._togDay=(d,el)=>{const i=CLD.selectedDays.indexOf(d);if(i>-1)CLD.selectedDays.splice(i,1);else CLD.selectedDays.push(d);el.classList.toggle('on');};
 App._togDN=(n,el)=>{
   if(!CLD.selectedDates)CLD.selectedDates=[];
@@ -302,6 +315,8 @@ App._saveCl=(editing)=>{
   CLD.scheduleTime=$('#cn-time')?.value||null;
   CLD._deadlineDate=$('#cn-ddate')?($('#cn-ddate').value||null):_clDeadlineDate(CLD.id);
   if($('#cn-anyone'))CLD.anyOne=$('#cn-anyone').classList.contains('on');
+  // A case's closing rule rides on tm_checklist_meta (see _tmMetaSave) — never on any_one.
+  if($('#cn-signoff'))CLD._requireSignoff=$('#cn-signoff').classList.contains('on');
   if(!CLD.name){toast('Name required','err');
     const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
     return;}
@@ -324,6 +339,9 @@ App._saveCl=(editing)=>{
   // existing checklists row changes shape; the deadline TIME stays on schedule_time, which
   // already means exactly that.
   const _ddate=CLD._deadlineDate||null;const _cid=CLD.id;
+  // captured BEFORE CLD is cleared below — reading CLD after that is a TypeError that the
+  // catch would swallow, silently losing the deadline date on every single save.
+  const _rsig=(CLD.frequency==='One-time')?(CLD._requireSignoff===true):undefined;
   const toastMsg=editing?'Saved':'Checklist created';
   // ── Clear CLD FIRST so render() never re-opens the modal ──
   CLD=null;
@@ -332,7 +350,7 @@ App._saveCl=(editing)=>{
   toast(toastMsg);
   saveDB();
   render();
-  _tmMetaSave(_cid,_ddate);
+  _tmMetaSave(_cid,_ddate,_rsig);
   // ── Sync to Supabase in background ──
   sb.from('checklists').upsert(clRow,{onConflict:'id'}).then(({error})=>{
     if(error){console.error('Checklist sync error:',error.message);toast('Not synced: '+error.message.slice(0,60),'warn');}
@@ -396,4 +414,4 @@ App.delCl=(id)=>{
 
 /* (Templates were removed in round 9 — the tm_templates table is untouched, only the feature is gone.) */
 
-window.Q_TYPES=Q_TYPES;window.Q_TYPE_CLR=Q_TYPE_CLR;window.Q_TYPE_BG=Q_TYPE_BG;window.NUM_CONDITIONS=NUM_CONDITIONS;window.clsPage=clsPage;window._renderClModal=_renderClModal;window._freqUI=_freqUI;
+window.Q_TYPES=Q_TYPES;window.Q_TYPE_CLR=Q_TYPE_CLR;window.Q_TYPE_BG=Q_TYPE_BG;window.NUM_CONDITIONS=NUM_CONDITIONS;window.clsPage=clsPage;window._renderClModal=_renderClModal;window._freqUI=_freqUI;window._runModeUI=_runModeUI;

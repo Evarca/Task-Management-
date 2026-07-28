@@ -69,58 +69,148 @@ function mkCase(over) {
 const submitBy = (c, uid2) => W.DB.submissions.push({ id: 's_' + uid2, checklistId: c.id, userId: uid2,
   date: W.caseDate(c), status: 'On Time', submittedAt: new Date().toISOString(), tasks: [],
   questionResponses: [], editCount: 0, editHistory: [] });
+const signoffMode = c => { W.DB.tmMeta[c.id] = Object.assign({}, W.DB.tmMeta[c.id], { requireSignoff: true }); return c; };
+const answer = (c, qid, by) => W.DB.tmAnswers.push({ id: W._ansId(c.id, TODAY, qid), checklistId: c.id,
+  date: W.caseDate(c), questionId: qid, response: 'Yes', comment: '', photos: [], submittedBy: by || 'ana',
+  submittedAt: new Date().toISOString(), locked: true, editCount: 0 });
 const asUser = (id, fn) => { const prev = W.S.uid; W.S.uid = id; try { return fn(); } finally { W.S.uid = prev; } };
 const SRC = resolve(process.cwd(), 'src');
 
-/* ══ 1 · the toggle decides — for cases too ══ */
-describe('1 — individual cases are real now', () => {
-  it('isShared follows the toggle, not the frequency', () => {
+/* ══ 1 · a case keeps the per-question engine; the toggle decides CLOSING ══ */
+describe('1 — the toggle is a closing rule, never a feature switch', () => {
+  it('every case uses the shared per-question engine, whatever the toggle says', () => {
     expect(W.isShared(mkCase({ id: 'cA', anyOne: true }))).toBe(true);
-    expect(W.isShared(mkCase({ id: 'cB', anyOne: false }))).toBe(false);
-    expect(W.isShared(mkCase({ id: 'cC', frequency: 'Daily', anyOne: false }))).toBe(false);
+    expect(W.isShared(signoffMode(mkCase({ id: 'cB', anyOne: false })))).toBe(true);
+    expect(W.needsAllSignoff(W.clById('cB'))).toBe(true);
+    expect(W.needsAllSignoff(W.clById('cA'))).toBe(false);   // the any_one column has no say for cases
+    expect(W.isShared(mkCase({ id: 'cC', frequency: 'Daily', anyOne: false }))).toBe(false); // recurring: unchanged
+    expect(W.needsAllSignoff(mkCase({ id: 'cD', anyOne: false }))).toBe(false);  // a case defaults to any-one-closes
   });
 
-  it('an individual case closes only when EVERY assignee has submitted', () => {
-    const c = mkCase({ anyOne: false });
+  it('per-question submit works on a case with the toggle OFF', async () => {
+    const c = signoffMode(mkCase({ anyOne: false }));
+    await asUser('ana', async () => {
+      W.RUN[c.id] = { questionResponses: [{ questionId: 'q1', response: 'Yes', comment: '', photos: [] }] };
+      await W.App._ansSubmit(c.id, TODAY, 'q1');
+      delete W.RUN[c.id];
+    });
+    const a = W._ansFor(c.id, W.caseDate(c), 'q1');
+    expect(a && a.locked).toBe(true);                       // the answer landed and locked
+    expect(W.caseProg(c)).toMatchObject({ done: 1, total: 2 });
+  });
+
+  it('working statuses and per-question costs are available on a toggle-OFF case', () => {
+    const c = signoffMode(mkCase({ anyOne: false }));
+    asUser('ana', () => {
+      W.App._setQStatus(c.id, TODAY, 'q1', 'waiting_client');
+      W.App._waitNoteSave(c.id, TODAY, 'q1');               // no note typed — just clears the modal
+      W.App._qCostSet(c.id, TODAY, 'q1', '400');
+    });
+    expect(W._qStatusOf(c.id, W.caseDate(c), 'q1').status).toBe('waiting_client');
+    expect(W.DB.tmQCosts[W._qsKey(c.id, W.caseDate(c), 'q1')].amount).toBe(400);
+    asUser('ana', () => {
+      W.RUN[c.id] = { questionResponses: [] };
+      const card = W._qCard(c, W.DB.questions[0], TODAY, false);
+      expect(card).toContain('Waiting on client');          // the chips are back
+      expect(card).toContain('Waiting on authority');
+      expect(card).toContain('Cost used');
+      expect(card).toContain('Submit answer');              // per-question submit is back
+      delete W.RUN[c.id];
+    });
+  });
+
+  it('toggle OFF: the case closes only once EVERY assignee signs off', () => {
+    const c = signoffMode(mkCase({ anyOne: false }));
     expect(W.caseSub(c)).toBe(null);
     submitBy(c, 'ana');
-    expect(W.caseSub(c)).toBe(null);                       // Ben still owes his copy
-    expect(W.clOn(c, TODAY)).toBe(true);                   // …so it stays on the day
-    expect(W.caseProg(c)).toMatchObject({ done: 1, total: 2, complete: false });
+    expect(W.caseSub(c)).toBe(null);                        // Ben has not signed
+    expect(W.clOn(c, TODAY)).toBe(true);                    // …so it stays on the day
+    expect(W.caseSignoff(c)).toMatchObject({ done: 1, total: 2, complete: false });
+    expect(W.subForCl(c, 'ben', TODAY)).toBe(null);         // Ana's sign-off is not Ben's
     submitBy(c, 'ben');
-    expect(W.caseSub(c)).toBeTruthy();                     // now it is closed
-    expect(W.caseProg(c).complete).toBe(true);
+    expect(W.caseSub(c)).toBeTruthy();
+    expect(W.caseSignoff(c).complete).toBe(true);
   });
 
-  it('a shared case still closes on the first submission', () => {
+  it('default (no sign-off flag): the first submission closes it for everyone', () => {
     const c = mkCase({ anyOne: true });
     submitBy(c, 'ana');
     expect(W.caseSub(c)).toBeTruthy();
+    expect(W.subForCl(c, 'ben', TODAY)).toBeTruthy();
   });
 
-  it('the client file renders the INDIVIDUAL block with per-person rows', () => {
-    const c = mkCase({ anyOne: false });
+  it('the run footer asks for a sign-off, and reports how many are in', () => {
+    const c = signoffMode(mkCase({ anyOne: false }));
+    answer(c, 'q1'); answer(c, 'q2');
+    asUser('ana', () => {
+      expect(W._clFooter(c, W.caseDate(c), null, false, false, W.me())).toContain('Sign off');
+      submitBy(c, 'ana');
+      const mine = W.subForCl(c, 'ana', TODAY);
+      const foot = W._clFooter(c, W.caseDate(c), mine, false, false, W.me());
+      expect(foot).toContain('You signed off');
+      expect(foot).toContain('waiting on 1 more');
+    });
+  });
+
+  it('the client file shows every question with its status and cost — plus who signed off', () => {
+    const c = signoffMode(mkCase({ anyOne: false }));
+    answer(c, 'q1');
+    asUser('ana', () => W.App._qCostSet(c.id, TODAY, 'q2', '400'));
+    W.DB.tmQStatus[W._qsKey(c.id, W.caseDate(c), 'q2')] = { status: 'waiting_client', changedBy: 'ana', changedAt: HOURS_AGO(30) };
     submitBy(c, 'ana');
     const html = W._locProgTab(W.DB.locations[0]);
-    expect(html).toContain('INDIVIDUAL');
-    expect(html).toContain('1/2 submitted');
-    expect(html).toContain('Ana Adams');
+    expect(html).toContain('Trade name reserved?');         // every question is listed…
+    expect(html).toContain('MOA signed?');
+    expect(html).toContain('Waiting on client');            // …with its working status…
+    expect(html).toContain('AED 400');                      // …and its utilized cost
+    expect(html).toContain('1/2 · 50%');                    // question-based progress
+    expect(html).toContain('Sign-off 1/2');                 // and the sign-off strip
     expect(html).toContain('Ben Blake');
-    expect(html).toContain('OPEN');                        // Ben's row
-    expect(html).not.toContain('NEXT UP');                 // that is a shared-run concept
   });
 
-  it('the clients list progress column is people-based for individual cases', () => {
-    const c = mkCase({ anyOne: false });
-    submitBy(c, 'ana');
+  it('the clients list progress column counts questions', () => {
+    const c = signoffMode(mkCase({ anyOne: false }));
+    answer(c, 'q1');
     W.S.route = 'locations'; W.S.filters = {};
     expect(W.locsPage()).toContain('1 open · 50%');
   });
 
-  it('the builder note no longer claims cases ignore the switch', () => {
+  it('the builder note explains the closing rule, not a feature switch', () => {
     const builder = readFileSync(resolve(SRC, 'pages/checklists.js'), 'utf8');
     expect(builder).not.toContain('always worked as one shared run');
-    expect(builder).toContain('applies to One-time client cases too');
+  });
+});
+
+/* ══ 1b · the exact production shape that broke: any_one=false, no sign-off flag ══ */
+describe('1b — a legacy case (any_one=false, untouched meta) has every feature', () => {
+  it('renders per-question submit, all three status chips and the cost box', () => {
+    const c = mkCase({ anyOne: false });          // no signoffMode() — straight from the DB
+    expect(W.needsAllSignoff(c)).toBe(false);     // closes on the first sign-off, as it always did
+    asUser('ana', () => {
+      W.RUN[c.id] = { questionResponses: [] };
+      const card = W._qCard(c, W.DB.questions[0], TODAY, false);
+      expect(card).toContain('Submit answer');
+      expect(card).toContain('In progress');
+      expect(card).toContain('Waiting on client');
+      expect(card).toContain('Waiting on authority');
+      expect(card).toContain('Cost used');
+      delete W.RUN[c.id];
+    });
+  });
+
+  it('the client file lists every question with its status and utilized cost', () => {
+    const c = mkCase({ anyOne: false });
+    answer(c, 'q1');
+    asUser('ana', () => W.App._qCostSet(c.id, TODAY, 'q2', '400'));
+    W.DB.tmQStatus[W._qsKey(c.id, W.caseDate(c), 'q2')] =
+      { status: 'waiting_client', changedBy: 'ana', changedAt: HOURS_AGO(30) };
+    const html = W._locProgTab(W.DB.locations[0]);
+    expect(html).toContain('Trade name reserved?');
+    expect(html).toContain('MOA signed?');
+    expect(html).toContain('Waiting on client');
+    expect(html).toContain('AED 400');
+    expect(html).toContain('1/2 · 50%');
+    expect(html).not.toContain('Sign-off');       // not opted in, so no sign-off strip
   });
 });
 
@@ -223,7 +313,7 @@ describe('5 — three charts removed', () => {
 /* ══ 5b · the today widgets tell the truth about individual cases ══ */
 describe('5b — overview widgets honour the individual model', () => {
   it('an individual case is not "submitted" until everyone handed in', () => {
-    const c = mkCase({ anyOne: false });
+    const c = signoffMode(mkCase({ anyOne: false }));
     submitBy(c, 'ana');
     const rows = asUser('boss', () => W._clOverview(TODAY));
     const row = rows.find(r => r.c.id === c.id);
@@ -275,22 +365,21 @@ describe('6 — brand on the status page', () => {
     expect(html).toContain('Client status');
   });
 
-  it('an individual case reads as people-progress on the link, with no step ticks', async () => {
+  it('the client always sees the step list, whatever the internal closing rule is', async () => {
     W.sb.rpc = async () => ({ data: payload(), error: null });
     W._pubData = null;
     await W._pubStatusRender('livetoken12345678', true);
     const html = document.getElementById('app').innerHTML;
-    expect(html).toContain('1/2 · 50%');
-    expect(html).toContain('individual submissions');
-    expect(html).toContain('<b>1 of 2</b> received');
-    expect(html).not.toContain('Trade name reserved?');    // no shared step list on individual cases
+    expect(html).toContain('Trade name reserved?');        // steps are never hidden from the client
+    expect(html).toContain('0/1 · 0%');                    // step-based progress
+    expect(html).not.toContain('individual submissions');  // internal sign-off is not client-facing
   });
 });
 
 /* ══ 7 · costs stay available on individual client work ══ */
 describe('7 — cost box on individual cards', () => {
   it('the own-copy card carries Cost used for client-attached checklists', () => {
-    const c = mkCase({ anyOne: false });
+    const c = signoffMode(mkCase({ anyOne: false }));
     asUser('ana', () => {
       W.RUN[c.id] = { questionResponses: [] };
       const card = W._qCard(c, W.DB.questions[0], TODAY, false);

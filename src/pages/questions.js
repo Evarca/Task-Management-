@@ -610,6 +610,7 @@ function _snapshotCLD(){
   if(el('cn-time'))CLD.scheduleTime=el('cn-time').value||null;
   if(el('cn-ddate'))CLD._deadlineDate=el('cn-ddate').value||null; // pending deadline date survives re-renders
   if(el('cn-anyone'))CLD.anyOne=el('cn-anyone').classList.contains('on');
+  if(el('cn-signoff'))CLD._requireSignoff=el('cn-signoff').classList.contains('on');   // case closing rule (tm_checklist_meta)
 }
 
 

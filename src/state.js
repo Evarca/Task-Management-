@@ -288,6 +288,7 @@ const subForCl=(c,uid,date)=>{
   const own=subFor(c.id,uid,date);
   if(own)return own;
   if(!isShared(c))return null;               // individual: a teammate's submission is NOT yours
+  if(needsAllSignoff(c))return null;         // case needing every sign-off: yours is still owed
   return DB.submissions.find(s=>s.checklistId===c.id&&s.date===date&&s.status!=='Editing')||null;
 };
 // Any submission for this run regardless of who made it or its state (used by the run guard).

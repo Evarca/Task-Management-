@@ -28,22 +28,22 @@ const effDate=(c,date)=>isCase(c)?caseDate(c):date;
 const caseSub=c=>{
   if(!isCase(c))return null;
   const subs=(DB.submissions||[]).filter(s=>s.checklistId===c.id&&s.date===caseDate(c)&&s.status!=='Editing');
-  if(isShared(c))return subs[0]||null;                       // shared: one submission closes it for everyone
-  const need=(c.assignees||[]);                              // individual: closed only when EVERY assignee submitted
+  if(!needsAllSignoff(c))return subs[0]||null;               // toggle ON: one sign-off closes it
+  const need=(c.assignees||[]);                              // toggle OFF: closed only once EVERYONE signed off
   if(!need.length)return subs[0]||null;
   const have=new Set(subs.map(s=>s.userId));
   if(!need.every(id=>have.has(id)))return null;
   return subs.slice().sort((a,b)=>String(b.submittedAt||'').localeCompare(String(a.submittedAt||'')))[0]||null;
 };
-/* One progress number that works for BOTH case models: shared → answered questions;
-   individual → assignees who have submitted their copy. */
-const caseProg=c=>{
-  if(!c)return{total:0,done:0,complete:false};
-  if(isShared(c))return _ansProgress(c,caseDate(c));
-  const subs=(DB.submissions||[]).filter(s=>s.checklistId===c.id&&s.date===caseDate(c)&&s.status!=='Editing');
-  const done=new Set(subs.map(s=>s.userId)).size;
-  const total=(c.assignees||[]).length||1;
-  return{total,done:Math.min(done,total),complete:done>=total&&total>0};
+/* A case's progress is its QUESTION progress — the answers are shared whatever the toggle says. */
+const caseProg=c=>c?_ansProgress(c,caseDate(c)):{total:0,done:0,complete:false};
+/* Who has signed off, for a case that needs every assignee to (toggle OFF). */
+const caseSignoff=c=>{
+  const need=(c&&c.assignees)||[];
+  const subs=(DB.submissions||[]).filter(s=>c&&s.checklistId===c.id&&s.date===caseDate(c)&&s.status!=='Editing');
+  const have=new Set(subs.map(s=>s.userId));
+  const done=need.filter(id=>have.has(id)).length;
+  return{done,total:need.length,complete:need.length>0&&done>=need.length,have};
 };
 /* SHARED vs INDIVIDUAL — the whole rule, in one place.
    Shared: one run for the team; different people answer different questions; one submission
@@ -51,12 +51,22 @@ const caseProg=c=>{
    assignee can complete" toggle asks for on a recurring checklist.
    Individual (toggle off): every assignee fills and submits their OWN copy — a teammate's
    submission never closes yours. */
-/* R10: the "Any one assignee can complete" toggle decides the run model EVERYWHERE — for
-   One-time client cases too. ON = one shared run (per-question submit, one submission closes
-   it for all). OFF = every assignee fills and submits their OWN copy, even on a case.
-   (Existing One-time checklists were stamped any_one=true by migration, since that is exactly
-   how they behaved before this round — nothing in flight changed.) */
-const isShared=c=>!!c&&c.anyOne===true;
+/* R11: a One-time client CASE always uses the shared per-question engine — per-question
+   Submit, working statuses (in progress / waiting on client / waiting on authority), waiting
+   notes, per-question costs and the client-facing step list. That engine IS case management;
+   the toggle never turns it off.
+
+   What the "Any one assignee can complete" toggle decides:
+     - recurring checklist → ON: one shared run. OFF: everyone fills their own copy.
+     - One-time CASE      → its own switch, "Every assignee must sign off": OFF (the default)
+                            any one assignee closes it; ON every assignee signs off first.
+                            Either way they all work the SAME shared questions.
+
+   That case switch lives on tm_checklist_meta, NOT on checklists.any_one: the checklists
+   table is written by a whole-table upsert from every client, so a tab holding a stale cache
+   silently reverts server-side edits to it. tm_checklist_meta is targeted-write only. */
+const isShared=c=>!!c&&(isCase(c)||c.anyOne===true);
+const needsAllSignoff=c=>!!c&&isCase(c)&&((DB.tmMeta||{})[c.id]||{}).requireSignoff===true;
 
 function clOn(c,date){if(c.status&&c.status!=='Active')return false;
   if(c.startDate&&date<String(c.startDate).slice(0,10))return false;
@@ -539,7 +549,7 @@ App._togPw=(id,btn)=>{
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window._draftStrip=_draftStrip;window._draftFor=_draftFor;window._draftSave=_draftSave;window._draftDelete=_draftDelete;
 window._refLinks=_refLinks;window.guardDelete=guardDelete;
-window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.isCase=isCase;window.caseDate=caseDate;window.effDate=effDate;window.caseSub=caseSub;window.caseProg=caseProg;window.isShared=isShared;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.fldPw=fldPw;window.selF=selF;window.mkTog=mkTog;window.card=card;window.clientsOf=clientsOf;window.clientIdsOf=clientIdsOf;window.clientIdsOfTicket=clientIdsOfTicket;window.matchesClient=matchesClient;window.clientFilter=clientFilter;window.FILTER_BAR_ST=FILTER_BAR_ST;window.FILTER_SEL_ST=FILTER_SEL_ST;window.filterBar=filterBar;window.filterLabel=filterLabel;window.filterSearch=filterSearch;window.filterSelect=filterSelect;window.filterClear=filterClear;window.filterCount=filterCount;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;
+window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.isCase=isCase;window.caseDate=caseDate;window.effDate=effDate;window.caseSub=caseSub;window.caseProg=caseProg;window.caseSignoff=caseSignoff;window.isShared=isShared;window.needsAllSignoff=needsAllSignoff;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.fldPw=fldPw;window.selF=selF;window.mkTog=mkTog;window.card=card;window.clientsOf=clientsOf;window.clientIdsOf=clientIdsOf;window.clientIdsOfTicket=clientIdsOfTicket;window.matchesClient=matchesClient;window.clientFilter=clientFilter;window.FILTER_BAR_ST=FILTER_BAR_ST;window.FILTER_SEL_ST=FILTER_SEL_ST;window.filterBar=filterBar;window.filterLabel=filterLabel;window.filterSearch=filterSearch;window.filterSelect=filterSelect;window.filterClear=filterClear;window.filterCount=filterCount;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;
 
 /* Human hours: 2.83 → "2h 50m" (decimals confuse people; CSV exports keep the numbers). */
 function fmtH(h){h=Number(h)||0;const neg=h<0?'-':'';h=Math.abs(h);let H=Math.floor(h),M=Math.round((h-H)*60);if(M===60){H++;M=0;}return neg+H+'h'+(M?' '+M+'m':'');}

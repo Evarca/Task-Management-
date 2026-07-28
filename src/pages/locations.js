@@ -171,18 +171,18 @@ async function _pubStatusRender(token,fresh){
   const cases=Array.isArray(data.cases)?data.cases:[];
   const caseHtml=cases.map(cs=>{
     const steps=Array.isArray(cs.steps)?cs.steps:[];
-    const indiv=cs.any_one===false;                          // individual case: people-based progress
-    const pplT=Number(cs.people_total)||0,pplD=Number(cs.people_done)||0;
     const done=steps.filter(s2=>s2.done).length;
-    const pct=indiv?(pplT?Math.round(pplD/pplT*100):0):(steps.length?Math.round(done/steps.length*100):0);
+    const pct=steps.length?Math.round(done/steps.length*100):0;   // always the STEP progress
     const complete=!!cs.done;
-    const waitingYou=indiv?[]:steps.filter(s2=>!s2.done&&s2.waiting==='waiting_client');
+    // A case whose team still owes internal sign-offs is finished step-wise but not closed.
+    const awaitingSignoff=!complete&&steps.length>0&&done>=steps.length;
+    const waitingYou=steps.filter(s2=>!s2.done&&s2.waiting==='waiting_client');
     const clId=String(cs.checklist_id||'');
     return `<div style="background:#fff;border:1px solid #ECEDF0;border-radius:16px;box-shadow:0 1px 3px rgba(15,15,15,.04);padding:18px 20px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <span style="font-size:15.5px;font-weight:800;color:#15171C">${esc(cs.name||'')}</span>
         ${complete?'<span style="font-size:10px;font-weight:800;padding:2px 10px;border-radius:99px;background:#DCFCE7;color:#0B7A55">COMPLETED</span>':'<span style="font-size:10px;font-weight:800;padding:2px 10px;border-radius:99px;background:#EEF2FF;color:#4338CA">IN PROGRESS</span>'}
-        <span style="margin-left:auto;font-size:13px;font-weight:800;color:${complete?'#0B7A55':'#374151'}">${indiv?pplD+'/'+pplT:done+'/'+steps.length} · ${pct}%</span>
+        <span style="margin-left:auto;font-size:13px;font-weight:800;color:${complete?'#0B7A55':'#374151'}">${done}/${steps.length} · ${pct}%</span>
       </div>
       <div style="height:8px;border-radius:99px;background:#F3F4F6;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${pct}%;background:${complete?'#22C55E':'#0EA5E9'};border-radius:99px"></div></div>
       ${cs.deadline_date&&!complete?`<div style="font-size:12px;color:#6B7280;margin-bottom:10px">Target completion: <b>${esc(fmtS(String(cs.deadline_date)))}${cs.deadline_time?' · '+esc(cs.deadline_time):''}</b></div>`:''}
@@ -203,8 +203,8 @@ async function _pubStatusRender(token,fresh){
           </div>`;}).join('')}
         ${waitingYou.some(s2=>s2.can_respond)?'<div style="font-size:11px;color:#B45309;margin-top:5px">Tap <b>Respond</b> to reply, attach the documents, or simply confirm — it reaches the team instantly.</div>':''}
       </div>`:''}
-      ${indiv?`<div style="font-size:12px;color:#6B7280;border-top:1px solid #F5F4F0;padding-top:8px">Being completed as individual submissions — <b>${pplD} of ${pplT}</b> received.</div>`:''}
-      <div>${indiv?'':steps.map(s2=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0">
+      ${awaitingSignoff?`<div style="font-size:12px;color:#6B7280;border-top:1px solid #F5F4F0;padding-top:8px">Everything is done — with our team for final checks.</div>`:''}
+      <div>${steps.map(s2=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F5F4F0">
         <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${s2.done?'background:#DCFCE7;color:#0B7A55':'background:#F3F4F6;color:#C8C5BD'}">${s2.done?ic('check','w-3 h-3'):''}</span>
         <span style="flex:1;font-size:13px;font-weight:600;color:${s2.done?'#9CA3AF':'#15171C'}">${esc(s2.label||'')}</span>
         ${s2.replied_at&&!s2.done?`<span title="Received — thank you" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#DBEAFE;color:#1D4ED8">SENT ${new Date(s2.replied_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} ✓</span>`:''}
@@ -409,47 +409,22 @@ function _locProgTab(l){
 
   // ── one case block ──
   const lastNudge=(qid,cid)=>{const n=(DB.tmNudges||[]).filter(x=>x.clientId===l.id&&(!qid||x.questionId===qid)&&(!cid||x.checklistId===cid)).sort((a,b)=>String(b.sentAt).localeCompare(String(a.sentAt)))[0];return n||null;};
-  /* An INDIVIDUAL case (toggle off): every assignee submits their own copy, so progress is
-     people-based and there are no shared per-step answers to list. */
-  const caseBlockIndiv=c=>{
+  /* A case whose toggle is OFF needs EVERY assignee to sign off before it closes. The work
+     itself is still the shared per-question list — this strip just shows who has signed. */
+  const signoffStrip=c=>{
+    if(!needsAllSignoff(c))return'';
     const cd=caseDate(c);
-    const prog=caseProg(c);
-    const pct=prog.total?Math.round(prog.done/prog.total*100):0;
-    const cs=caseSub(c);
-    const dl=_clDeadlineLabel(c);
-    const over=_clOverdue(c,cd);
+    const so=caseSignoff(c);
     const rows=(c.assignees||[]).map(aid=>{
       const u=uById(aid);
       const sub=(DB.submissions||[]).find(x=>x.checklistId===c.id&&x.date===cd&&x.userId===aid&&x.status!=='Editing');
-      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--c-border)">
-        <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;${sub?'background:#DCFCE7;color:#0B7A55':'background:var(--c-surface-2);color:var(--c-text-3)'}">${sub?ic('check','w-3 h-3'):''}</span>
-        <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:${sub?'var(--c-text-2)':'var(--c-text)'}">${esc(u?fullName(u):'Unknown')}</span>
-        ${sub?`<span style="font-size:11px;color:var(--c-text-3)">${sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>`
-            :'<span style="font-size:10px;font-weight:800;padding:1px 8px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-3)">OPEN</span>'}
-      </div>`;}).join('');
-    return `<div class="ui-card" style="margin-bottom:8px;overflow:hidden">
-      <div style="padding:11px 14px 9px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <span style="font-size:14.5px;font-weight:800">${esc(c.name)}</span>
-          <span title="The 'Any one assignee' toggle is OFF — each person submits their own copy" style="font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-2)">INDIVIDUAL</span>
-          ${cs?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#DCFCE7;color:#0B7A55">COMPLETED ${cs.submittedAt?new Date(cs.submittedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</span>`
-            :over?'<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#FEE2E2;color:#B91C1C">OVERDUE</span>'
-            :'<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;background:#EEF2FF;color:#4338CA">OPEN</span>'}
-          <span style="margin-left:auto;font-size:12px;font-weight:800;color:${pct===100?'#0B7A55':'var(--c-text-2)'}">${prog.done}/${prog.total} submitted · ${pct}%</span>
-        </div>
-        <div style="height:7px;border-radius:99px;background:var(--c-surface-2);overflow:hidden;margin-bottom:6px"><div style="height:100%;width:${pct}%;border-radius:99px;background:${cs?'#22C55E':over?'#EF4444':'#0EA5E9'};transition:width .3s"></div></div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--c-text-3)">
-          <span>opened ${fmtS(caseDate(c))}</span>
-          ${dl?`<span style="${over&&!cs?'color:#B91C1C;font-weight:700':''}">due ${esc(dl)}</span>`:''}
-          <span>each of the ${(c.assignees||[]).length} assignees submits their own copy</span>
-          ${canBillView()&&_runUtilized(c.id,cd)>0?`<span title="Σ per-step costs on this case">utilized <b style="color:var(--c-text-2)">${esc(fmtMoney(_runUtilized(c.id,cd),_cliCurrency(l.id)))}</b></span>`:''}
-        </div>
-      </div>
-      <div style="padding:2px 14px 10px">${rows}</div>
+      return `<span title="${sub?'Signed off '+(sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''):'Not signed off yet'}" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;${sub?'background:#DCFCE7;color:#0B7A55':'background:var(--c-surface-2);color:var(--c-text-3)'}">${sub?ic('check','w-3 h-3'):''}${esc(u?fullName(u):'Unknown')}</span>`;}).join('');
+    return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 0 2px;border-top:1px dashed var(--c-border);margin-top:4px">
+      <span title="This case closes only when every assignee has signed off" style="font-size:9.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Sign-off ${so.done}/${so.total}</span>
+      ${rows}
     </div>`;
   };
   const caseBlock=c=>{
-    if(!isShared(c))return caseBlockIndiv(c);
     const cd=caseDate(c);
     const qs=_clQuestions(c);
     const prog=_ansProgress(c,cd);
@@ -496,7 +471,7 @@ function _locProgTab(l){
           ${canBillView()&&_runUtilized(c.id,cd)>0?`<span title="Σ per-step costs on this case">utilized <b style="color:var(--c-text-2)">${esc(fmtMoney(_runUtilized(c.id,cd),_cliCurrency(l.id)))}</b></span>`:''}
         </div>
       </div>
-      <div style="padding:2px 14px 10px">${rows}</div>
+      <div style="padding:2px 14px 10px">${rows}${signoffStrip(c)}</div>
     </div>`;
   };
 
